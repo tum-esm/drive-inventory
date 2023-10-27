@@ -22,7 +22,7 @@ def fetch_calendar(year:int,
     """
     
     # load data path to calendar file
-    calendar_path = data_paths.CALENDER_PATH
+    calendar_path = data_paths.CALENDER_FILE
     
     try: 
         df = pd.read_excel(calendar_path, sheet_name=str(year))

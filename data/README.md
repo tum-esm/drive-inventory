@@ -13,3 +13,22 @@ Here, the VISUM model data and traffic counting data and HBEFA emission facators
 
 ## Inventory
 Contains the final products including the gridded inventory and timeprofiles. 
+
+
+
+
+Main couting dataset: 
+
+- **date** --> date of the measurement
+- **road_link_id** --> identifies the road link in the traffic model (manual work)
+- **road_type** --> highway, city highway, 
+- **detector_id** --> identifier for the dectector loop (several detectors could be)
+- **detector_type** --> NaN or 8+1 
+- **vehicle_type** --> PKW, LNF, SNF, MOT, BUS
+- **metric** --> volume or speed
+- **daily_value** --> daily sum value
+- **00:00**
+- .
+- . 
+- . 
+- **23:00** --> (hourly values)

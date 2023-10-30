@@ -11,3 +11,7 @@ MUNICH_BOARDERS_EXTENDED_FILE = abs_path + "/data/auxiliary/geodata/munich_board
 
 # visum path´
 VISUM_FOLDER_PATH = abs_path + "/data/restricted_input/visum/"
+
+# counting data´
+MST_COUNTING_PATH = abs_path + "/data/restricted_input/counting_data/lhm/"
+BAST_COUNTING_PATH = abs_path + "/data/restricted_input/counting_data/bast/"

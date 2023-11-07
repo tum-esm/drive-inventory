@@ -10,4 +10,5 @@ pygeos
 rtree
 xlrd
 bokeh
-openpyxl
+openpyxlpip
+lmu_meteo_api

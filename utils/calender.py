@@ -2,6 +2,9 @@
 The path to the calender excel file should be defined in data_paths.py (utils)
 """
 
+__version__ = 1.1
+__author__ = 'Daniel Kühbacher'
+
 import pandas as pd
 
 import data_paths

@@ -11,7 +11,7 @@ import data_paths
 from dateutil.parser import parse
 
 
-class calender: 
+class Calendar: 
     def __init__(self) -> None: 
         self.cal = self._fetch_calendar(2018)
         self.cal = pd.concat([self.cal, self._fetch_calendar(2019)], axis=0)
@@ -21,7 +21,7 @@ class calender:
         self.cal = pd.concat([self.cal, self._fetch_calendar(2023)], axis=0)
         self.cal['date'] = pd.to_datetime(self.cal['date'], format='%Y-%m-%d')
     
-    def get_calender(self) -> pd.DataFrame:
+    def get_calendar(self) -> pd.DataFrame:
         return self.cal
     
     def _fetch_calendar(self, year:int) -> pd.DataFrame:
@@ -91,8 +91,8 @@ class calender:
 if __name__ == "__main__":
     """Testing
     """
-    cal = calender()
-    print(f'Loaded calender from {cal.get_calender()["date"].min()} unitl {cal.get_calender()["date"].max()}')
+    cal = Calendar()
+    print(f'Loaded calender from {cal.get_calendar()["date"].min()} unitl {cal.get_calendar()["date"].max()}')
     print(cal.get_day_type('2022 June 15'))
 
     

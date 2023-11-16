@@ -12,3 +12,4 @@ xlrd
 bokeh
 openpyxlpip
 lmu_meteo_api
+pyarrow

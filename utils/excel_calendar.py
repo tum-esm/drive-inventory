@@ -46,7 +46,52 @@ class Calendar:
             print('Could not load calendar. Check path and year.')
             print(e)
             
+    def get_weekday(self, date_string) -> int:
+        """_summary_
+
+        Args:
+            date_string (_type_): _description_
+
+        Returns:
+            int: _description_
+        """
+        if type(date_string) == str:
+            try:
+                dt = parse(date_string)
+            except Exception: 
+                print(f'Could not parse datestring {date_string}.')
+                return None
+        else: 
+            dt = date_string
+        
+        cal_indexed = self.cal.set_index('date')
+        return cal_indexed.loc[dt]['day_of_week']
+        
+        
+        
     def get_day_type(self, date_string) -> int:
+        """_summary_
+
+        Args:
+            date_string (_type_): _description_
+
+        Returns:
+            int: _description_
+        """
+        if type(date_string) == str:
+            try:
+                dt = parse(date_string)
+            except Exception: 
+                print(f'Could not parse datestring {date_string}.')
+                return None
+        else: 
+            dt = date_string
+        
+        cal_indexed = self.cal.set_index('date')
+        return cal_indexed.loc[dt]['day_type']
+            
+
+    def get_day_type_combined(self, date_string) -> int:
         """Returns different day types that are based on the weekday and specific day_types. 
         0 -> Normweekday (Tuesday to Thursday)
         1 -> Weekday
@@ -77,13 +122,13 @@ class Calendar:
         if cal_day_type==1 and (cal_weekday>=1 and cal_weekday<=3):
             return 0
         # Weekday -> Monday to Friday
-        if cal_day_type==1: 
-            return 1 
-        # Weekday during vacation / gap day
-        if cal_day_type==4 or cal_day_type==5: 
+        if cal_day_type==1:
+            return 1
+        # Weekday during vacation / gap da
+        if cal_day_type==4 or cal_day_type==5:
             return 2
         # Saturday
-        if cal_day_type==2 and cal_weekday==5: 
+        if cal_day_type==2 and cal_weekday==5:
             return 3
         # Sunday/ Holiday -> shops are closed in Germany
         if cal_day_type==3 or cal_weekday==6:

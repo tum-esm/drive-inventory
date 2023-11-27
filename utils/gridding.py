@@ -24,12 +24,6 @@ class GriddingEngine:
         self.grid = input_grid
         self.crs = 25832
     
-    def load_tno_grid_hr(data_path:gpd.GeoDataFrame=None) -> None:
-        """loads TNO grid if available
-        aå
-        """
-        self.grid = gpd.read_file(load tn)
-    
     def make_grid(self, h_step:float, w_step:float, x_min:float, 
                   y_min:float, x_max:float, y_max:float) -> None:
         

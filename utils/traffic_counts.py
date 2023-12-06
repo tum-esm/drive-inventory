@@ -16,16 +16,51 @@ class TrafficCounts:
         """__summary__
         """
         file_path = data_paths.COUNTING_PATH + 'counting_data_combined.parquet'
-        self.counting_df = pd.read_parquet(file_path)
-        self.counting_df['date'] = pd.to_datetime(self.counting_df['date'])
-
-        self.visum_df = gpd.read_file(data_paths.VISUM_FOLDER_PATH+'visum_links.gpkg')
+        _counting_df = pd.read_parquet(file_path)
+        self.counting_df = self._normalize_count(_counting_df)
+        
+        # prepare dataframes for vehicle share calculation
+        self._daily_median = _counting_df[_counting_df['complete']]\
+            .groupby(['vehicle_class', 'road_type','date'])['daily_value'].median()
+        self._sum_cnt = self._daily_median['PC'] + self._daily_median['LCV'] +\
+            self._daily_median['HGV'] + self._daily_median['MOT'] + self._daily_median['BUS']
+            
+        
     
-    def get_daily_cycle(self, day_type, road_type):
-        pass
     
-    def _calc_activity(self):
-        pass
+    
+    
+    
+    
+    
+    
+    
+    def get_vehicle_shares(self, date, vehicle_class):
+        
+        shares = self._daily_median[vehicle_class]/self._sum_cnt
+        return shares.loc[date]
+    
+    def _normalize_count(self, df:pd.DataFrame) -> pd.DataFrame:
+        """Normalizes all complete counting time series to their 2019 weekday reference.
+        
+        Args:
+            df (pd.DataFrame): _description_
+        Returns:
+            pd.DataFrame:
+        """
+        mean_counts = df[(df['date'].between('2019-01-01','2019-12-31')) &
+                     (df['day_type']==0) & 
+                     (df['complete'])] \
+        .groupby(['road_link_id','vehicle_class'])['daily_value'].mean().reset_index()
+        
+        counts_norm = pd.merge(df, mean_counts, on=['road_link_id','vehicle_class'], suffixes=('','_mean'))
+        counts_norm['daily_value'] = counts_norm['daily_value'] / counts_norm['daily_value_mean']
+        counts_norm = counts_norm.drop('daily_value_mean', axis = 1)
+        
+        # normalize daily cycles
+        counts_norm.iloc[:,-25:] = counts_norm.iloc[:,-25:].div(counts_norm.iloc[:,-25:].sum(axis =1), axis = 0)
+        return counts_norm
+    
 
     def get_day_type(self, date:str):
 

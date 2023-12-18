@@ -1,4 +1,8 @@
-data/restricted_input/*
+data/restricted_input/counting_data/bast/temp
+data/restricted_input/counting_data/bast/temp_raw
+data/restricted_input/counting_data/lhm/location_details
+
+*.csv
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

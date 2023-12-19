@@ -16,3 +16,11 @@ VISUM_FOLDER_PATH = abs_path + "/data/restricted_input/visum/"
 COUNTING_PATH = abs_path + "/data/restricted_input/counting_data/"
 MST_COUNTING_PATH = abs_path + "/data/restricted_input/counting_data/lhm/"
 BAST_COUNTING_PATH = abs_path + "/data/restricted_input/counting_data/bast/"
+
+#emission factors
+EF_BUS = abs_path + "/data/restricted_input/hbefa/EFA_HOT_Vehcat_Coach.XLS"
+EF_PC = abs_path + "/data/restricted_input/hbefa/EFA_HOT_Vehcat_PC.XLS"
+EF_LCV = abs_path + "/data/restricted_input/hbefa/EFA_HOT_Vehcat_LCV.XLS"
+EF_HGV = abs_path + "/data/restricted_input/hbefa/EFA_HOT_Vehcat_HGV.XLS"
+EF_MOT = abs_path + "/data/restricted_input/hbefa/EFA_HOT_Vehcat_MOT.XLS"
+EF_ColdStart = abs_path + "/data/restricted_input/hbefa/EFA_ColdStart_Vehcat_ColdStart.XLS"

@@ -3,10 +3,12 @@
 __version__ = 0.3
 __author__ = ['Ali Ahmad Khan', 'Daniel Kühbacher']
 
-import data_paths
 import pandas as pd
 import numpy as np
+
 from datetime import datetime
+
+import data_paths
 import excel_calendar
 
 class TrafficCounts:
@@ -41,7 +43,7 @@ class TrafficCounts:
         self.annual_cycles = _counting_df_norm[
             (_counting_df_norm['vehicle_class'] == 'SUM')]\
                 .groupby(['road_type','date'])['daily_value'].median()
-                
+        
         # prepare daily cycles
         _irrelevant_rows = ['road_type', 'road_link_id', 'daily_value', 'complete', 'valid']
         _d_cycles = _counting_df_norm.drop(_irrelevant_rows, axis=1).set_index('date')\
@@ -65,7 +67,6 @@ class TrafficCounts:
         Args:
             input (pd.Dataframe): dataframe to calculate the mean from.
             iqr_range (tuple, optional): _description_. Defaults to (5,95).
-
         Returns:
             float: iqr-mean of the input dataframe
         """
@@ -107,7 +108,6 @@ class TrafficCounts:
         Returns:
             float: _description_
         """
-        
         day_factor = self.annual_cycles.loc[road_type, date]
         return day_factor
 
@@ -126,7 +126,6 @@ class TrafficCounts:
             float: _description_
         """
         # Calculates Vehicles Sharefor all dates 
-        
         share = self.vehicle_shares.loc[road_type, date, vehicle_class]
         return share
 
@@ -134,22 +133,22 @@ class TrafficCounts:
                                   datestring:str,
                                   vehicle_class:str):
         """_summary_
-
         Args:
             datestring (str): _description_
             hour (int): _description_
             vehicle_class (str): _description_
-
         Returns:
             _type_: _description_
         """
-        
         dt = self.cal.get_day_type_combined(datestring)
         year = datetime.strptime(datestring, '%Y-%m-%d').year
         month = datetime.strptime(datestring, '%Y-%m-%d').month
 
         cycle = self.daily_cycles.loc[year, month, dt, vehicle_class]
         return cycle
+    
+    def fill_gaps(self, parameters): 
+        pass
 
 
 if __name__ == "__main__":

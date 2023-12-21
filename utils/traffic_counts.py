@@ -5,6 +5,8 @@ __author__ = ['Ali Ahmad Khan', 'Daniel Kühbacher']
 
 import pandas as pd
 import numpy as np
+from itertools import product
+from statsmodels.tsa.arima.model import ARIMA
 
 from datetime import datetime
 
@@ -38,11 +40,13 @@ class TrafficCounts:
                               _daily_median['HGV']],axis=1).fillna(0).sum(axis=1)
         
         self.vehicle_shares = _daily_median/_sum_cnt
+        self.vehicle_shares = self.fill_gaps(self.vehicle_shares, ['road_type', 'vehicle_class'], 0)
         
         # prepare annual cycles
         self.annual_cycles = _counting_df_norm[
             (_counting_df_norm['vehicle_class'] == 'SUM')]\
                 .groupby(['road_type','date'])['daily_value'].median()
+        self.annual_cycles = self.fill_gaps(self.vehicle_shares, ['road_type'], 'daily_value')
         
         # prepare daily cycles
         _irrelevant_rows = ['road_type', 'road_link_id', 'daily_value', 'complete', 'valid']
@@ -147,8 +151,50 @@ class TrafficCounts:
         cycle = self.daily_cycles.loc[year, month, dt, vehicle_class]
         return cycle
     
-    def fill_gaps(self, parameters): 
-        pass
+    def fill_gaps(self, df, categories, value_column, arima_order=(12, 1, 1)): 
+        """
+        Takes a DataFrame, creates a complete date range for each category combination,
+        merges with the original dataset, and fills missing values using ARIMA.
+
+        :param df: The DataFrame to process.
+        :param categories: List of column names to define unique category combinations.
+        :param value_column: Name of the column containing the values for ARIMA.
+        :param arima_order: Order of the ARIMA model.
+        """
+        filled_df = pd.DataFrame()
+        # Creating a date range from 2019-01-01 to 2022-12-31
+        date_range = pd.date_range(start='2019-01-01', end='2022-12-31')
+
+        # Create a template DataFrame with all combinations of categories and date
+        unique_categories = [df[category].unique() for category in categories]
+        all_combinations = product(*unique_categories, date_range)
+        template_df = pd.DataFrame(all_combinations, columns=categories + ['date'])
+
+        # Ensure 'date' column in df is in datetime format
+        df['date'] = pd.to_datetime(df['date'])
+
+        # Merge the template DataFrame with the original DataFrame
+        merged_df = template_df.merge(df, on=categories + ['date'], how='left', indicator=True)
+
+        # Fill missing values with ARIMA for each category combination
+        for category_values in product(*unique_categories):
+            filter_condition = np.logical_and.reduce([merged_df[cat] == val for cat, val in zip(categories, category_values)])
+            train_set = merged_df.loc[filter_condition, ['date', value_column]]
+            first_non_nan = train_set[value_column].first_valid_index()
+
+            if first_non_nan is not None:
+                train_set = train_set.loc[first_non_nan:]
+                train_set.set_index('date', inplace=True)
+                train_set = train_set.asfreq(pd.infer_freq(train_set.index))
+
+                arima = ARIMA(train_set[value_column], order=arima_order)
+                predictions = arima.fit().predict()
+
+                train_set[value_column][train_set[value_column].isna()] = predictions[train_set[value_column].isna()]
+                filled_df = pd.concat([filled_df, pd.DataFrame(train_set)], ignore_index=True)
+
+        return filled_df
+
 
 
 if __name__ == "__main__":

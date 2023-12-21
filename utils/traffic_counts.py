@@ -46,7 +46,7 @@ class TrafficCounts:
         self.annual_cycles = _counting_df_norm[
             (_counting_df_norm['vehicle_class'] == 'SUM')]\
                 .groupby(['road_type','date'])['daily_value'].median()
-        self.annual_cycles = self.fill_gaps(self.vehicle_shares, ['road_type'], 'daily_value')
+        self.annual_cycles = self.fill_gaps(self.annual_cycles, ['road_type'], 'daily_value')
         
         # prepare daily cycles
         _irrelevant_rows = ['road_type', 'road_link_id', 'daily_value', 'complete', 'valid']
@@ -150,7 +150,8 @@ class TrafficCounts:
 
         cycle = self.daily_cycles.loc[year, month, dt, vehicle_class]
         return cycle
-    
+
+
     def fill_gaps(self, df, categories, value_column, arima_order=(12, 1, 1)): 
         """
         Takes a DataFrame, creates a complete date range for each category combination,
@@ -161,7 +162,7 @@ class TrafficCounts:
         :param value_column: Name of the column containing the values for ARIMA.
         :param arima_order: Order of the ARIMA model.
         """
-        filled_df = pd.DataFrame()
+        df = df.reset_index()
         # Creating a date range from 2019-01-01 to 2022-12-31
         date_range = pd.date_range(start='2019-01-01', end='2022-12-31')
 
@@ -174,26 +175,27 @@ class TrafficCounts:
         df['date'] = pd.to_datetime(df['date'])
 
         # Merge the template DataFrame with the original DataFrame
-        merged_df = template_df.merge(df, on=categories + ['date'], how='left', indicator=True)
+        merged_df = template_df.merge(df, on=categories + ['date'], how='left')
 
         # Fill missing values with ARIMA for each category combination
         for category_values in product(*unique_categories):
             filter_condition = np.logical_and.reduce([merged_df[cat] == val for cat, val in zip(categories, category_values)])
-            train_set = merged_df.loc[filter_condition, ['date', value_column]]
+            train_set = merged_df.loc[filter_condition].copy()
             first_non_nan = train_set[value_column].first_valid_index()
 
             if first_non_nan is not None:
-                train_set = train_set.loc[first_non_nan:]
+                train_set.loc[first_non_nan:, value_column].fillna(method='ffill', inplace=True)  # Forward fill
                 train_set.set_index('date', inplace=True)
                 train_set = train_set.asfreq(pd.infer_freq(train_set.index))
 
                 arima = ARIMA(train_set[value_column], order=arima_order)
                 predictions = arima.fit().predict()
 
-                train_set[value_column][train_set[value_column].isna()] = predictions[train_set[value_column].isna()]
-                filled_df = pd.concat([filled_df, pd.DataFrame(train_set)], ignore_index=True)
+                train_set[value_column].fillna(predictions, inplace=True)
+                merged_df.loc[filter_condition, value_column] = train_set[value_column].values
 
-        return filled_df
+        return merged_df
+
 
 
 

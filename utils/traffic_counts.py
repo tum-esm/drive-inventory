@@ -101,54 +101,47 @@ class TrafficCounts:
         df_norm.iloc[:,-24:] = df_norm.iloc[:,-24:].div(df_norm.iloc[:,-24:].sum(axis =1), axis = 0)
         return df_norm
 
-    def get_daily_scaling_factor(self, 
-                                 road_type: str, 
-                                 date: str) -> float:
-        """_summary_
-
+    def get_daily_scaling_factors(self,
+                                 date: str) -> pd.Series:
+        """returns daily scaling factor of all road types as pd.Series
         Args:
-            date (str): _description_
+            date (str): date string
 
         Returns:
-            float: _description_
+            pd.Series: daily scaling factors for each road type
         """
-        day_factor = self.annual_cycles.loc[road_type, date]
-        return day_factor
+        day_factors = self.annual_cycles.loc[:, date]
+        return day_factors
 
-    def get_vehicle_share(self, 
-                           road_type:str, 
-                           date:str, 
-                           vehicle_class:str) -> float:
-        """_summary_
+    def get_vehicle_share(self,
+                           date:str) -> pd.DataFrame:
+        """returns dataframe with vehicle shares of different vehicle types and road types s
 
         Args:
-            road_type (str): _description_
             date (str): _description_
-            vehicle_class (str): _description_
 
         Returns:
             float: _description_
         """
         # Calculates Vehicles Sharefor all dates 
-        share = self.vehicle_shares.loc[road_type, date, vehicle_class]
-        return share
+        shares = self.vehicle_shares[:,date,:].reset_index()
+        shares = shares.pivot(columns='vehicle_class', index ='road_type', values = 0)
+        return shares
 
     def get_hourly_scaling_factors(self, 
-                                  datestring:str,
-                                  vehicle_class:str):
+                                  date:str):
         """_summary_
         Args:
-            datestring (str): _description_
-            hour (int): _description_
-            vehicle_class (str): _description_
+            date (str): _description_
         Returns:
             _type_: _description_
         """
-        dt = self.cal.get_day_type_combined(datestring)
-        year = datetime.strptime(datestring, '%Y-%m-%d').year
-        month = datetime.strptime(datestring, '%Y-%m-%d').month
+        dt = self.cal.get_day_type_combined(date)
+        year = datetime.strptime(date, '%Y-%m-%d').year
+        month = datetime.strptime(date, '%Y-%m-%d').month
 
-        cycle = self.daily_cycles.loc[year, month, dt, vehicle_class]
+        cycle = self.daily_cycles.loc[year, month, dt, :]
+        cycle = cycle.drop(['SUM'])
         return cycle
 
 

@@ -164,8 +164,7 @@ class HbefaHotEmissions:
                 break
             iterator += 1
         
-        los = f'{praeamble}/{HbefaHotEmissions.hbefa_road_abbreviations[road_type]}\
-            /{str(hbefa_speed)}/{HbefaHotEmissions.service_class[iterator]}'
+        los = f'{praeamble}/{HbefaHotEmissions.hbefa_road_abbreviations[road_type]}/{str(hbefa_speed)}/{HbefaHotEmissions.service_class[iterator]}'
         return los
 
 

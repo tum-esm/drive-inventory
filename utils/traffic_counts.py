@@ -40,13 +40,16 @@ class TrafficCounts:
                               _daily_median['HGV']],axis=1).fillna(0).sum(axis=1)
         
         self.vehicle_shares = _daily_median/_sum_cnt
-        self.vehicle_shares = self.fill_gaps(self.vehicle_shares, ['road_type', 'vehicle_class'], 0)
+        #self.vehicle_shares = self.fill_gaps(self.vehicle_shares,
+        #                                     categories=['road_type', 'vehicle_class'],
+        #                                     value_column=0)
+        #self.vehicle_shares.set_index(['road_type', 'date', 'vehicle_class'], inplace =True)
         
         # prepare annual cycles
         self.annual_cycles = _counting_df_norm[
             (_counting_df_norm['vehicle_class'] == 'SUM')]\
                 .groupby(['road_type','date'])['daily_value'].median()
-        self.annual_cycles = self.fill_gaps(self.annual_cycles, ['road_type'], 'daily_value')
+        #self.annual_cycles = self.fill_gaps(self.annual_cycles, ['road_type'], 'daily_value')
         
         # prepare daily cycles
         _irrelevant_rows = ['road_type', 'road_link_id', 'daily_value', 'complete', 'valid']
@@ -188,9 +191,6 @@ class TrafficCounts:
                 merged_df.loc[filter_condition, value_column] = train_set[value_column].values
 
         return merged_df
-
-
-
 
 if __name__ == "__main__":
     count = TrafficCounts()

@@ -5,10 +5,15 @@ and use them to calculate hourly traffic emissions of different vehicle classes 
 __version__ = 0.1
 __author__ = "Daniel Kühbacher"
 
+import os
+
 import pandas as pd
 import numpy as np
+import xlrd
 
+from traffic_counts import TrafficCounts
 import data_paths
+
 
 class HbefaHotEmissions: 
     """Defines HBEFA parameters and classes, imports emission factors and 
@@ -62,6 +67,7 @@ class HbefaHotEmissions:
     
     # multipliers to calculate the daily traffic volume as car units 
     # -> 1 Heavy truck equals to 3 car units
+    #TODO Check HBS for exact values and cite them
     car_unit_factors = {'HGV': 3, 
                         'BUS': 3, 
                         'LCV':2, 
@@ -90,13 +96,15 @@ class HbefaHotEmissions:
             dict: emission factors
         """
         try:
-            df = pd.read_excel(filepath)
+            
+            workbook = xlrd.open_workbook(filepath, logfile=open(os.devnull, "w"))
+            df = pd.read_excel(workbook) # read_excel accepts workbooks too
             columns_to_keep = ["Year", "Component", "TrafficSit",
                             "Gradient", "EFA_weighted"]
             df = df[columns_to_keep] # reduce to interesting columns
             df = df.set_index(['Year', 'TrafficSit', 'Gradient', 'Component'])
             df_dict = df.to_dict() # convert to dict for faster access
-            print(f'Load emission factors from {filepath}')
+            print(f'Loaded emission factors from {filepath}')
             return df_dict
         
         except Exception as e: 
@@ -146,7 +154,7 @@ class HbefaHotEmissions:
         """Calculate traffic situation based on hourly volume capacity ratio
 
         Args:
-            htv_car_unit (float): Hourly Traffic Volume convertet to personal car units
+            htv_car_unit (float): Hourly Traffic Volume converted to passenger car equivalents
             hour_capacity (float): road specific hour capacity
             road_type (str): road type of the link
             hbefa_speed (int): Indicated speed converted to HBEFA speed
@@ -200,7 +208,7 @@ class HbefaHotEmissions:
         dtv_array = np.array([dtv_vehicle[v] for v in diurnal_cycle_vehicle.index])
         htv = (np.transpose(diurnal_cycle_vehicle.to_numpy()) * dtv_array)
 
-        # calculate total hourly traffic count as personal car units
+        # calculate total hourly traffic count as passenger car equivalents
         htv_car_units = np.array([HbefaHotEmissions.car_unit_factors[v]\
             for v in diurnal_cycle_vehicle.index])
         htv_car_units = (htv * htv_car_units).sum(axis=1)
@@ -209,50 +217,122 @@ class HbefaHotEmissions:
         los_class = [self.calc_los_class(htv_car_unit = x,
                                          hour_capacity = hour_capacity,
                                          road_type = road_type,
-                                         hbefa_speed = hbefa_speed) for x in htv_car_units]
+                                         hbefa_speed = hbefa_speed) 
+                     for x in htv_car_units]
+        
+        # initialize dict for total emissions
+        emission_day = {c: {v:0 for v in HbefaHotEmissions.vehicle_classes} 
+                        for c in HbefaHotEmissions.components}
+        
+        # calculate emissions for each hour of the day
+        for i in range(0,24):
+            # combine vehicle class and hourly traffic volume for each vehicle
+            htv_hour = dict(zip(diurnal_cycle_vehicle.index, htv[i]))
+            los_hour = los_class[i]
+        
+            # caclulate emissions for components and vehicle classes
+            for v in HbefaHotEmissions.vehicle_classes:
+                vehicle_emission_hour = dict()
+                for c in HbefaHotEmissions.components:
+                    try:
+                        emission_day[c][v] += self.ef_dict[v]['EFA_weighted']\
+                            [year,los_hour,hbefa_gradient,c] * htv_hour[v]
+                    except:
+                        # some gradients are missing which could cause errors
+                        emission_day[c][v] += self.ef_dict[v]['EFA_weighted']\
+                            [year,los_hour,'0%',c] * htv_hour[v]
+                            
+        return emission_day
+
+
+    def calculate_emissions_hourly(self,
+                                  dtv_vehicle:dict,
+                                  diurnal_cycle_vehicle:pd.DataFrame,
+                                  road_type:str,
+                                  speed:int,
+                                  slope:float,
+                                  hour_capacity:int,
+                                  year:int) -> dict:
+        """Calculate emissions for a full day
+
+        Args:
+            dtv_vehicle (dict): vehicle-specific daily traffic volume
+            diurnal_cycle_vehicle (pd.DataFrame): daily traffic cycle (24h) for different vehicle types
+            road_type (str): Road type
+            speed (int): Speed
+            slope (float): Road gradient
+            hour_capacity (int): Hourly capacity of the road
+            year (int): year of investigation (there are different emission factors for different years)
+
+        Returns:
+            dict: calculated emission for each vehicle class, component and hour of the day.
+        """
+
+        # convert input parameters to closest parameters available in HEBFA
+        hbefa_gradient = self._convert_hbefa_gradient(slope)
+        hbefa_speed = self._convert_hbefa_speed(road_type = road_type,
+                                                speed = speed)
+        
+        # caclulate hourly traffic count of each vehicle class
+        dtv_array = np.array([dtv_vehicle[v] for v in diurnal_cycle_vehicle.index])
+        htv = (np.transpose(diurnal_cycle_vehicle.to_numpy()) * dtv_array)
+
+        # calculate total hourly traffic count as passenger car equivalents
+        htv_car_units = np.array([HbefaHotEmissions.car_unit_factors[v]\
+            for v in diurnal_cycle_vehicle.index])
+        htv_car_units = (htv * htv_car_units).sum(axis=1)
+        
+        # list of 24 service classes for each hour of the day
+        los_class = [self.calc_los_class(htv_car_unit = x,
+                                         hour_capacity = hour_capacity,
+                                         road_type = road_type,
+                                         hbefa_speed = hbefa_speed) 
+                     for x in htv_car_units]
         
         # initialize dict for total emissions
         emission_day = dict()
         
         # calculate emissions for each hour of the day
         for i in range(0,24):
-            # combine vehicle calass and hourly traffic volume for each
-            # vehicle
+            # combine vehicle class and hourly traffic volume for each vehicle
             htv_hour = dict(zip(diurnal_cycle_vehicle.index, htv[i]))
             los_hour = los_class[i]
         
-            # retrieve emission factors
+            # caclulate emissions for components and vehicle classes
             emission_hour = dict()
             for v in HbefaHotEmissions.vehicle_classes:
-                emissionfactor_hour = dict()
+                vehicle_emission_hour = dict()
                 for c in HbefaHotEmissions.components:
                     try:
-                        emissionfactor_hour.update({c : self.ef_dict[v]['EFA_weighted']\
-                            [year,los_hour,hbefa_gradient,c]})
+                        vehicle_emission_hour.update({c : self.ef_dict[v]['EFA_weighted']\
+                            [year,los_hour,hbefa_gradient,c] * htv_hour[v]})
                     except:
                         # some gradients are missing which could cause errors
-                        emissionfactor_hour.update({c : self.ef_dict[v]['EFA_weighted']\
-                            [year,los_hour,'0%',c]})
-                emission_hour.update({v : emissionfactor_hour})
-                
-            # multiply emission factors with hourly traffic volume
-            for key, value in emission_hour.items():
-                for component in value: 
-                    value[component] = value[component] * htv_hour[key]
+                        vehicle_emission_hour.update({c : self.ef_dict[v]['EFA_weighted']\
+                            [year,los_hour,'0%',c] * htv_hour[v]})
+                emission_hour.update({v : vehicle_emission_hour})
             emission_day.update({i : emission_hour})
         return emission_day
         
 
 if __name__ == '__main__':
-#TODO Update Test functions
+    
+    dtv_vehicle_test = {'PC':10000, 
+                    'LCV': 1500, 
+                    'HGV': 1000,
+                    'MOT': 100, 
+                    'BUS': 50}
+    
+    cycles = TrafficCounts()
+    diurnal_cycles = cycles.get_hourly_scaling_factors(date='2019-01-02')
+
     t = HbefaHotEmissions()
-    emissions = t.calculate_daily_emissions(dtv_vehicle = 10000,
+    emissions = t.calculate_emissions_daily(dtv_vehicle = dtv_vehicle_test,
                             hour_capacity = 1000, 
-                            hour_factors = [0.1,0.1,0.1,0.2,0.2,0.3],
-                            road_type = 'Access-residential', 
-                            vehicle_type = 'HGV', 
-                            speed = 40, 
+                            diurnal_cycle_vehicle = diurnal_cycles,
+                            road_type = 'Local/Collector', 
+                            speed = 60, 
                             slope = 0.45,
                             year = 2019)
     
-    print(emissions)
+    print(emissions['CO2(total)']['PC'])

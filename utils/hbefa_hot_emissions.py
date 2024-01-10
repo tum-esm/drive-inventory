@@ -11,6 +11,8 @@ import pandas as pd
 import numpy as np
 import xlrd
 
+from dev_utils import timeit
+
 from traffic_counts import TrafficCounts
 import data_paths
 
@@ -24,6 +26,8 @@ class HbefaHotEmissions:
     
     components = ['CO', 'NOx', 'PM', 'CO2(rep)', 'CO2(total)', 
                   'NO2', 'CH4', 'BC (exhaust)', 'CO2e']
+    
+    components = ['NOx']
     
     # TODO Update threshols -> literature research/ use counting data
     service_thresholds = {'Motorway-Nat': [75, 80, 95, 100],
@@ -175,7 +179,7 @@ class HbefaHotEmissions:
         los = f'{praeamble}/{HbefaHotEmissions.hbefa_road_abbreviations[road_type]}/{str(hbefa_speed)}/{HbefaHotEmissions.service_class[iterator]}'
         return los
 
-
+    @timeit
     def calculate_emissions_daily(self,
                                   dtv_vehicle:dict,
                                   diurnal_cycle_vehicle:pd.DataFrame,
@@ -221,8 +225,12 @@ class HbefaHotEmissions:
                      for x in htv_car_units]
         
         # initialize dict for total emissions
-        emission_day = {c: {v:0 for v in HbefaHotEmissions.vehicle_classes} 
-                        for c in HbefaHotEmissions.components}
+        #emission_day = {c: {v:0 for v in HbefaHotEmissions.vehicle_classes} 
+        #                for c in HbefaHotEmissions.components}
+        
+        _combinations = [(v,c) for v in HbefaHotEmissions.vehicle_classes 
+                        for c in HbefaHotEmissions.components] 
+        emissions_dict = {comb:0 for comb in _combinations}
         
         # calculate emissions for each hour of the day
         for i in range(0,24):
@@ -232,17 +240,17 @@ class HbefaHotEmissions:
         
             # caclulate emissions for components and vehicle classes
             for v in HbefaHotEmissions.vehicle_classes:
-                vehicle_emission_hour = dict()
+                #vehicle_emission_hour = dict()
                 for c in HbefaHotEmissions.components:
                     try:
-                        emission_day[c][v] += self.ef_dict[v]['EFA_weighted']\
+                        emissions_dict[(v,c)] += self.ef_dict[v]['EFA_weighted']\
                             [year,los_hour,hbefa_gradient,c] * htv_hour[v]
                     except:
                         # some gradients are missing which could cause errors
-                        emission_day[c][v] += self.ef_dict[v]['EFA_weighted']\
+                        emissions_dict[(v,c)] += self.ef_dict[v]['EFA_weighted']\
                             [year,los_hour,'0%',c] * htv_hour[v]
                             
-        return emission_day
+        return emissions_dict
 
 
     def calculate_emissions_hourly(self,
@@ -301,22 +309,25 @@ class HbefaHotEmissions:
             # caclulate emissions for components and vehicle classes
             emission_hour = dict()
             for v in HbefaHotEmissions.vehicle_classes:
-                vehicle_emission_hour = dict()
+                #vehicle_emission_hour = dict()
                 for c in HbefaHotEmissions.components:
                     try:
-                        vehicle_emission_hour.update({c : self.ef_dict[v]['EFA_weighted']\
+                        emission_hour.update({(v,c) : self.ef_dict[v]['EFA_weighted']\
                             [year,los_hour,hbefa_gradient,c] * htv_hour[v]})
                     except:
                         # some gradients are missing which could cause errors
-                        vehicle_emission_hour.update({c : self.ef_dict[v]['EFA_weighted']\
+                        emission_hour.update({(v,c) : self.ef_dict[v]['EFA_weighted']\
                             [year,los_hour,'0%',c] * htv_hour[v]})
-                emission_hour.update({v : vehicle_emission_hour})
+                        
+                        
+                #emission_hour.update({v : vehicle_emission_hour})
+                
             emission_day.update({i : emission_hour})
         return emission_day
         
 
 if __name__ == '__main__':
-    
+    # test the function
     dtv_vehicle_test = {'PC':10000, 
                     'LCV': 1500, 
                     'HGV': 1000,
@@ -325,7 +336,7 @@ if __name__ == '__main__':
     
     cycles = TrafficCounts()
     diurnal_cycles = cycles.get_hourly_scaling_factors(date='2019-01-02')
-
+    
     t = HbefaHotEmissions()
     emissions = t.calculate_emissions_daily(dtv_vehicle = dtv_vehicle_test,
                             hour_capacity = 1000, 
@@ -335,4 +346,4 @@ if __name__ == '__main__':
                             slope = 0.45,
                             year = 2019)
     
-    print(emissions['CO2(total)']['PC'])
+    print(emissions)

@@ -11,8 +11,6 @@ import pandas as pd
 import numpy as np
 import xlrd
 
-from dev_utils import timeit
-
 from traffic_counts import TrafficCounts
 import data_paths
 
@@ -100,7 +98,6 @@ class HbefaHotEmissions:
             dict: emission factors
         """
         try:
-            
             workbook = xlrd.open_workbook(filepath, logfile=open(os.devnull, "w"))
             df = pd.read_excel(workbook) # read_excel accepts workbooks too
             columns_to_keep = ["Year", "Component", "TrafficSit",
@@ -178,8 +175,8 @@ class HbefaHotEmissions:
         
         los = f'{praeamble}/{HbefaHotEmissions.hbefa_road_abbreviations[road_type]}/{str(hbefa_speed)}/{HbefaHotEmissions.service_class[iterator]}'
         return los
-
-    @timeit
+    
+    
     def calculate_emissions_daily(self,
                                   dtv_vehicle:dict,
                                   diurnal_cycle_vehicle:pd.DataFrame,
@@ -209,8 +206,13 @@ class HbefaHotEmissions:
                                                 speed = speed)
         
         # caclulate hourly traffic count of each vehicle class
-        dtv_array = np.array([dtv_vehicle[v] for v in diurnal_cycle_vehicle.index])
-        htv = (np.transpose(diurnal_cycle_vehicle.to_numpy()) * dtv_array)
+        try:
+            dtv_array = np.array([dtv_vehicle[v] for v in diurnal_cycle_vehicle.index])
+            htv = (np.transpose(diurnal_cycle_vehicle.to_numpy()) * dtv_array)
+        except KeyError as e:
+            print('The keys in dtv_vehicle do not agree with the indexes in the diurnal cycles dataframe.')
+            print('Check key ' + str(e))
+            return 0
 
         # calculate total hourly traffic count as passenger car equivalents
         htv_car_units = np.array([HbefaHotEmissions.car_unit_factors[v]\
@@ -224,13 +226,9 @@ class HbefaHotEmissions:
                                          hbefa_speed = hbefa_speed) 
                      for x in htv_car_units]
         
-        # initialize dict for total emissions
-        #emission_day = {c: {v:0 for v in HbefaHotEmissions.vehicle_classes} 
-        #                for c in HbefaHotEmissions.components}
-        
-        _combinations = [(v,c) for v in HbefaHotEmissions.vehicle_classes 
-                        for c in HbefaHotEmissions.components] 
-        emissions_dict = {comb:0 for comb in _combinations}
+        vehicle_component_tuples = [(v,c) for v in HbefaHotEmissions.vehicle_classes
+                                    for c in HbefaHotEmissions.components] 
+        emissions_dict = {comb:0 for comb in vehicle_component_tuples}
         
         # calculate emissions for each hour of the day
         for i in range(0,24):
@@ -240,19 +238,22 @@ class HbefaHotEmissions:
         
             # caclulate emissions for components and vehicle classes
             for v in HbefaHotEmissions.vehicle_classes:
-                #vehicle_emission_hour = dict()
                 for c in HbefaHotEmissions.components:
                     try:
                         emissions_dict[(v,c)] += self.ef_dict[v]['EFA_weighted']\
-                            [year,los_hour,hbefa_gradient,c] * htv_hour[v]
-                    except:
-                        # some gradients are missing which could cause errors
-                        emissions_dict[(v,c)] += self.ef_dict[v]['EFA_weighted']\
-                            [year,los_hour,'0%',c] * htv_hour[v]
-                            
+                            [year, los_hour, hbefa_gradient, c] * htv_hour[v]
+                    except: 
+                        try:
+                            # some gradient values are missing which could cause errors
+                            emissions_dict[(v,c)] += self.ef_dict[v]['EFA_weighted']\
+                                [year, los_hour, '0%', c] * htv_hour[v]
+                        except Exception as e:
+                            print('Exception ' + (str(e)))
+                            print('Cannot calculate emissions.')
+                            return 0
         return emissions_dict
 
-
+# DEPRECATED
     def calculate_emissions_hourly(self,
                                   dtv_vehicle:dict,
                                   diurnal_cycle_vehicle:pd.DataFrame,
@@ -338,12 +339,13 @@ if __name__ == '__main__':
     diurnal_cycles = cycles.get_hourly_scaling_factors(date='2019-01-02')
     
     t = HbefaHotEmissions()
+
     emissions = t.calculate_emissions_daily(dtv_vehicle = dtv_vehicle_test,
-                            hour_capacity = 1000, 
-                            diurnal_cycle_vehicle = diurnal_cycles,
-                            road_type = 'Local/Collector', 
-                            speed = 60, 
-                            slope = 0.45,
-                            year = 2019)
+                    hour_capacity = 1000, 
+                    diurnal_cycle_vehicle = diurnal_cycles,
+                    road_type = 'Local/Collector', 
+                    speed = 30, 
+                    slope = 2,
+                    year = 2019)
     
     print(emissions)

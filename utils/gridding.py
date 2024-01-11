@@ -3,8 +3,8 @@
 - prepare emission grid
 - 
 
-
 """
+
 
 __version__ = 0.1
 __author__ = 'Daniel Kühbacher'
@@ -15,22 +15,20 @@ import numpy as np
 from shapely.geometry import Polygon
 
 
-
 class GriddingEngine: 
-    def __init__(self, input_grid:gpd.GeoDataFrame=None) -> None:
-        if input_grid is not None:
-            assert input_grid.geom_type == 'Polygon'
-        
-        self.grid = input_grid
+    def __init__(self, input_grid:gpd.GeoDataFrame = None):
         self.crs = 25832
-    
-    def make_grid(self, h_step:float, w_step:float, x_min:float, 
-                  y_min:float, x_max:float, y_max:float) -> None:
+        # define grid from input grid if not none   
+        self.grid = input_grid
         
-        assert x_min<x_max
-        assert y_min<y_max
-        assert h_step>0
-        assert w_step>0
+
+    def make_grid(self, h_step:float, w_step:float, x_min:float, 
+                  y_min:float, x_max:float, y_max:float) -> gpd.GeoDataFrame:
+        
+        assert x_min < x_max
+        assert y_min < y_max
+        assert h_step > 0
+        assert w_step > 0
         
         # calculate the number of rows and colums that fit in the 
         # area of interest
@@ -58,8 +56,32 @@ class GriddingEngine:
             XleftOrigin = XleftOrigin + w_step
             XrightOrigin = XrightOrigin + w_step
             
-            self.grid = gpd.GeoDataFrame({'geometry':polygons}, crs=str(self.crs))
-            
+        self.grid = gpd.GeoDataFrame({'geometry':polygons}, crs=str(self.crs))
+
+
+    def overlay_grid(self, visum_model, columns): 
+        
+        #Make overlay of data (road lengths) with outgrid (output grid)
+        data_geo = gpd.overlay(visum_model, 
+                            self.grid, 
+                            how = 'intersection', 
+                            keep_geom_type=True) 
+
+        #Calculate total road length (PROXY) for each segment cut off by the output grid
+        data_geo['PROXY'] = data_geo.geometry.length
+        
+        for col in columns: 
+            data_geo[col] = data_geo[col].astype('float') * data_geo['PROXY']
+
+        data_geo['CENTROID'] = data_geo.geometry.centroid # use centroid for exact assigment
+        data_geo = data_geo.set_geometry('CENTROID')
+        gridded_aux = gpd.sjoin(grid, data_geo, how="right", predicate='contains')
+        
+        grid = gridded_aux.groupby('index_left').sum()
+
+        grid = grid.fillna(0)
+        
+        return self.grid  
 
 if __name__ == '__main__': 
     

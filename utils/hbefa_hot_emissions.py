@@ -25,7 +25,7 @@ class HbefaHotEmissions:
     components = ['CO', 'NOx', 'PM', 'CO2(rep)', 'CO2(total)', 
                   'NO2', 'CH4', 'BC (exhaust)', 'CO2e']
     
-    components = ['NOx']
+    components = ['CO2(total)']
     
     # TODO Update threshols -> literature research/ use counting data
     service_thresholds = {'Motorway-Nat': [75, 80, 95, 100],

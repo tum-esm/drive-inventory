@@ -8,7 +8,7 @@ abs_path = str(pathlib.Path(__file__).parent.parent.resolve())
 CALENDER_FILE = abs_path + "/data/auxiliary/calender_18to23.xlsx"
 MUNICH_BOARDERS_FILE = abs_path + "/data/geodata/munich_boarders.gpkg"
 MUNICH_BOARDERS_EXTENDED_FILE = abs_path + "/data/geodata/munich_boarders_extended.gpkg" # also includes the motorway around Munich
-
+TNO_100M_GRID  = abs_path + "/data/geodata/TNO_100m_grid.gpkg"
 # visum path
 VISUM_FOLDER_PATH = abs_path + "/data/restricted_input/visum/"
 

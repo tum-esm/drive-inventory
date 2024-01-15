@@ -53,8 +53,12 @@ class TrafficCounts:
         
         # prepare daily cycles
         _irrelevant_rows = ['road_type', 'road_link_id', 'daily_value', 'complete', 'valid']
-        _d_cycles = _counting_df_norm.drop(_irrelevant_rows, axis=1).set_index('date')\
-            .groupby(['day_type', 'vehicle_class']).resample('1m').mean()
+        _d_cycles = _counting_df.drop(_irrelevant_rows, axis=1).set_index('date')\
+            .groupby(['day_type', 'vehicle_class']).resample('1m').median()
+            
+        # normalize daily cycles
+        _d_cycles.iloc[:,-24:] = _d_cycles.iloc[:,-24:].div(_d_cycles.iloc[:,-24:].sum(axis =1), axis = 0)
+        
         _d_cycles = _d_cycles.reset_index()
         _d_cycles.insert(2, 'month', _d_cycles['date'].dt.month)
         _d_cycles.insert(2, 'year', _d_cycles['date'].dt.year)
@@ -65,6 +69,7 @@ class TrafficCounts:
         
         # initialize calendar
         self.cal = excel_calendar.Calendar()
+
 
     def _iqr_mean(self, 
                   input:pd.DataFrame, 
@@ -82,6 +87,7 @@ class TrafficCounts:
         iqr_mean = np.mean(input[(input >= lower_bound) & (input <= upper_bound)])
         return iqr_mean
 
+
     def _normalize_count(self,
                          df:pd.DataFrame) -> pd.DataFrame:
         """Normalizes all complete counting time series to their 2019 weekday reference.
@@ -91,6 +97,8 @@ class TrafficCounts:
         Returns:
             pd.DataFrame: normalized conting data
         """
+        # mean normweekday count (day_type =0) of complete counting timeseries (complete = True)
+        # inter-quantile-range mean to reduce outlier influence
         df_mean = df[(df['date'].between('2019-01-01','2019-12-31')) &
                         (df['day_type']==0) & 
                         (df['complete'])] \
@@ -99,10 +107,9 @@ class TrafficCounts:
         df_norm = pd.merge(df, df_mean, on=['road_link_id','vehicle_class'], suffixes=('','_mean'))
         df_norm['daily_value'] = df_norm['daily_value'] / df_norm['daily_value_mean']
         df_norm = df_norm.drop('daily_value_mean', axis = 1)
-        
-        # normalize daily cycles
-        df_norm.iloc[:,-24:] = df_norm.iloc[:,-24:].div(df_norm.iloc[:,-24:].sum(axis =1), axis = 0)
+
         return df_norm
+
 
     def get_daily_scaling_factors(self,
                                  date: str) -> pd.Series:
@@ -115,6 +122,7 @@ class TrafficCounts:
         """
         day_factors = self.annual_cycles.loc[:, date]
         return day_factors
+
 
     def get_vehicle_share(self,
                            date:str) -> pd.DataFrame:
@@ -130,6 +138,7 @@ class TrafficCounts:
         shares = self.vehicle_shares[:,date,:].reset_index()
         shares = shares.pivot(columns='vehicle_class', index ='road_type', values = 0)
         return shares
+
 
     def get_hourly_scaling_factors(self, 
                                   date:str):
@@ -192,8 +201,9 @@ class TrafficCounts:
 
         return merged_df
 
+
 if __name__ == "__main__":
     count = TrafficCounts()
-    print("Alpha: ", count.get_daily_scaling_factor(road_type ='Local/Collector', date = '2022-01-01'))
-    print("Gamma: ", count.get_vehicle_share('Local/Collector','2022-01-01', 'HGV'))
-    print("Beta: ", count.get_hourly_scaling_factors('2022-01-01', 'HGV'))
+    print("Alpha: \n", count.get_daily_scaling_factors(date = '2022-01-01'))
+    print("Gamma: \n", count.get_vehicle_share(date = '2022-01-01'))
+    print("Beta: \n", count.get_hourly_scaling_factors('2022-01-01'))

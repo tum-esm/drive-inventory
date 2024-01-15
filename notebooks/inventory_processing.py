@@ -1,4 +1,7 @@
 # this function was exported to allow multiprocessing.
+import numpy as np
+import pandas as pd
+
 def calculate_daily_co2_emissions(date, 
                                   visum_dict, 
                                   cycles_obj, 
@@ -64,3 +67,36 @@ def calculate_daily_co2_emissions(date,
         print('Cannot process '+ date )
         print('Error: ' + str(e))
         return 0
+    
+    
+def calculate_coldstart_emissions(date, 
+                                  counts, 
+                                  activity, 
+                                  visum_zones, 
+                                  temperature,
+                                  cs_obj):
+    
+    print('Process ' +date)
+    
+    datestring = date
+    year = int(date[:4])
+    daily_emissions = list()
+    
+    # calculate hourly starts
+    diurnal_cycle_PC = counts.get_hourly_scaling_factors(date = datestring).loc['PC']
+    daily_starts = visum_zones['qv_pkw'] * activity[date]
+    hourly_starts = np.vstack(daily_starts.to_numpy()) * diurnal_cycle_PC.to_numpy()
+    
+    # temperature_profile
+    temperture_profile = temperature.loc[datestring].to_numpy()
+    
+    #daily_emissions = list()
+    for row in hourly_starts:
+        em = cs_obj.calculate_emission_daily(hourly_temperature=temperture_profile, 
+                                         hourly_starts = row, 
+                                         vehicle_class='pass. car', 
+                                         year = year)
+        
+        daily_emissions.append(em)
+    
+    return pd.concat(daily_emissions, axis=1).sum(axis =1)

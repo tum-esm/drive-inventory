@@ -59,28 +59,35 @@ class GriddingEngine:
         self.grid = gpd.GeoDataFrame({'geometry':polygons}, crs=str(self.crs))
 
 
-    def overlay_grid(self, visum_model, columns): 
+    def overlay_grid(self, geom_input, value_columns, source_type): 
         
         #Make overlay of data (road lengths) with outgrid (output grid)
-        data_geo = gpd.overlay(visum_model, 
-                            self.grid, 
-                            how = 'intersection', 
-                            keep_geom_type=True) 
+        data_geo = gpd.overlay(geom_input,
+                               self.grid,
+                               how = 'intersection',
+                               keep_geom_type=True) 
 
-        #Calculate total road length (PROXY) for each segment cut off by the output grid
-        data_geo['PROXY'] = data_geo.geometry.length
+        #Calculate total (PROXY) for each segment cut off by the output grid
+        if source_type == 'area':
+            data_geo['PROXY'] = data_geo.geometry.area
+        elif source_type == 'line': 
+            data_geo['PROXY'] = data_geo.geometry.length
+        else:
+            print(f'Ivalid source type {source_type}. Use `area` or `line` instead.')
+            return None
         
-        for col in columns: 
-            data_geo[col] = data_geo[col].astype('float') * data_geo['PROXY']
+        if type(value_columns) == list:
+            for col in value_columns: 
+                data_geo[col] = data_geo[col].astype('float') * data_geo['PROXY']
+        else: 
+            pass
 
-        data_geo['CENTROID'] = data_geo.geometry.centroid # use centroid for exact assigment
-        data_geo = data_geo.set_geometry('CENTROID')
-        gridded_aux = gpd.sjoin(grid, data_geo, how="right", predicate='contains')
+        data_geo = data_geo.set_geometry(data_geo.geometry.centroid)
         
-        grid = gridded_aux.groupby('index_left').sum()
-
-        grid = grid.fillna(0)
-        
+        gridded_aux = gpd.sjoin(self.grid, data_geo, how="right", predicate='contains')
+        self.grid = gridded_aux.groupby('index_left').sum(numeric_only = True)
+        self.grid = self.grid.fillna(0)
+    
         return self.grid  
 
 if __name__ == '__main__': 

@@ -55,17 +55,6 @@ class HbefaHotEmissions:
                  'Motorway': 'MW', 
                  'Rural': 'RUR'}
     
-    # speed values available for different road categories in HBEFA
-    hbefa_speed = {'Motorway-Nat': [80, 90, 100, 110, 120, 130],
-                   'Motorway-City': [60, 70, 80, 90, 100, 110],
-                   'TrunkRoad/Primary-National': [70, 80, 90, 100, 110, 120],
-                   'TrunkRoad/Primary-City': [50, 60, 70, 80, 90],
-                   'Distributor/Secondary': [30, 40, 50, 60, 70, 80],
-                   'Local/Collector': [30, 40, 50, 60],
-                   'Access-residential': [30, 40, 50]}
-    
-    # road gradients available in HBEFA
-    hbefa_gradients = [-6, -4, -2, 0, 2, 4, 6]
     
     # multipliers to calculate the daily traffic volume as car units 
     # -> 1 Heavy truck equals to 3 car units
@@ -114,39 +103,6 @@ class HbefaHotEmissions:
             return None
     
     
-    def _convert_hbefa_speed(self,
-                             road_type:str,
-                             speed:int) -> int:
-        """Converts speed value to closest speed value available in HEBFA
-
-        Args:
-            road_type (str): Road type 
-            speed (int): Speed 
-
-        Returns:
-            int: HBEFA speed
-        """
-        hbefa_speed = min(HbefaHotEmissions.hbefa_speed[road_type],
-                          key=lambda x: abs(x - speed))
-        return hbefa_speed
-    
-    
-    def _convert_hbefa_gradient(self,
-                                road_gradient:float) -> str:
-        """converts any road gradient to closest hbefa road gradient
-
-        Args:
-            road_gradient(float): Slope of the road
-
-        Returns:
-            str: road gradient string (e.g., '+6%')
-        """
-        hbefa_gradient = min(HbefaHotEmissions.hbefa_gradients,
-                             key=lambda x: abs(x - road_gradient))
-        hbefa_gradient_string = str(hbefa_gradient)+'%'
-        return hbefa_gradient_string
-    
-    
     def calc_los_class(self, 
                        htv_car_unit:float,
                        hour_capacity:float, 
@@ -181,8 +137,8 @@ class HbefaHotEmissions:
                                   dtv_vehicle:dict,
                                   diurnal_cycle_vehicle:pd.DataFrame,
                                   road_type:str,
-                                  speed:int,
-                                  slope:float,
+                                  hbefa_gradient:str,
+                                  hbefa_speed:float,
                                   hour_capacity:int,
                                   year:int) -> dict:
         """Calculate emissions for a full day
@@ -199,11 +155,6 @@ class HbefaHotEmissions:
         Returns:
             dict: calculated emission for each vehicle class, component and hour of the day.
         """
-
-        # convert input parameters to closest parameters available in HEBFA
-        hbefa_gradient = self._convert_hbefa_gradient(slope)
-        hbefa_speed = self._convert_hbefa_speed(road_type = road_type,
-                                                speed = speed)
         
         # caclulate hourly traffic count of each vehicle class
         try:

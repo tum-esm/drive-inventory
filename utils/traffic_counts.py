@@ -15,14 +15,24 @@ import excel_calendar
 
 class TrafficCounts:
     """ Reads combined counting data calculates and provides an interface to the traffic cycles.
-    """ 
+    """
 
     def __init__(self):
         """__summary__
         """
+        # initialize calendar
+        self.cal = excel_calendar.Calendar()
+        
         # read and import counting data
         _file_path = data_paths.COUNTING_PATH + 'counting_data_combined.parquet'
         _counting_df = pd.read_parquet(_file_path)
+        
+        # get information from the counting data
+        self.date_start = _counting_df['date'].min()
+        self.date_end = _counting_df['date'].max()
+        self.road_types = list(_counting_df['road_type'].unique())
+        self.vehicle_types = list(_counting_df['vehicle_class'].unique())
+        self.vehicle_types.remove('SUM')
         
         # normalice counting dataframe
         _counting_df_norm = self._normalize_count(_counting_df)
@@ -32,24 +42,21 @@ class TrafficCounts:
             (_counting_df['complete']) &
             (_counting_df['vehicle_class'].isin(['HGV', 'LCV', 'PC', 'MOT', 'BUS']))]\
                 .groupby(['vehicle_class', 'road_type','date'])['daily_value'].median()
+        # TODO -> gapfill daily median dataframe
 
         _sum_cnt = pd.concat([_daily_median['BUS'],
                               _daily_median['LCV'],
                               _daily_median['MOT'],
                               _daily_median['PC'],
-                              _daily_median['HGV']],axis=1).fillna(0).sum(axis=1)
+                              _daily_median['HGV']], axis=1).fillna(0).sum(axis=1)
         
         self.vehicle_shares = _daily_median/_sum_cnt
-        #self.vehicle_shares = self.fill_gaps(self.vehicle_shares,
-        #                                     categories=['road_type', 'vehicle_class'],
-        #                                     value_column=0)
-        #self.vehicle_shares.set_index(['road_type', 'date', 'vehicle_class'], inplace =True)
         
         # prepare annual cycles
         self.annual_cycles = _counting_df_norm[
             (_counting_df_norm['vehicle_class'] == 'SUM')]\
                 .groupby(['road_type','date'])['daily_value'].median()
-        #self.annual_cycles = self.fill_gaps(self.annual_cycles, ['road_type'], 'daily_value')
+        # TODO -> gapfill annual cycles
         
         # prepare daily cycles
         _irrelevant_rows = ['road_type', 'road_link_id', 'daily_value', 'complete', 'valid']
@@ -58,7 +65,6 @@ class TrafficCounts:
             
         # normalize daily cycles
         _d_cycles.iloc[:,-24:] = _d_cycles.iloc[:,-24:].div(_d_cycles.iloc[:,-24:].sum(axis =1), axis = 0)
-        
         _d_cycles = _d_cycles.reset_index()
         _d_cycles.insert(2, 'month', _d_cycles['date'].dt.month)
         _d_cycles.insert(2, 'year', _d_cycles['date'].dt.year)
@@ -66,11 +72,49 @@ class TrafficCounts:
         
         self.daily_cycles = _d_cycles.set_index(
             ['year', 'month', 'day_type', 'vehicle_class'])
+                
+        # prepare combined timeprofiles
+        self.timeprofile = dict()
+        for road_type in self.road_types:
+            self.timeprofile.update({road_type:self._combine_time_profile(road_type)})
+            
+    
+    def _combine_time_profile(self, road_type:str) -> pd.DataFrame:
+        """Combines annual activity,vehicle share and daily cycles to a hourly profile
+
+        Args:
+            road_type (str): Type of the road
+
+        Returns:
+            pd.DataFrame: time profile of specific road type
+        """
+
+        time_profile = pd.DataFrame()
+        # make datetime index
+        index = pd.date_range(start = self.date_start,
+                              end = self.date_end,
+                              freq = '1d')
         
-        # initialize calendar
-        self.cal = excel_calendar.Calendar()
+        for idx in index:
+            datestring = idx.strftime('%Y-%m-%d')
+            df = pd.DataFrame(index =pd.date_range(start=idx, periods = 24, freq='1h'))
 
-
+            try: 
+                activity = self.get_daily_scaling_factors(datestring).loc[road_type]
+                for vc in self.vehicle_types:
+                    share = self.get_vehicle_share(datestring).loc[road_type, vc]
+                    diurnal_cycle = self.get_hourly_scaling_factors(datestring).loc[vc]
+                    diurnal_cycle = diurnal_cycle * activity * share
+                    df[vc] = np.array(diurnal_cycle)
+            except:
+                for vc in self.vehicle_types:
+                    # if no valid data is available
+                    df[vc] = np.array([0]*24)
+            time_profile = pd.concat([time_profile, df]) # append time profile 
+        
+        return time_profile
+            
+            
     def _iqr_mean(self, 
                   input:pd.DataFrame, 
                   iqr_range:tuple = (5,95)) -> float: 

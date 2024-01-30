@@ -42,11 +42,11 @@ class TrafficCounts:
             (_counting_df['complete']) &
             (_counting_df['vehicle_class'].isin(['HGV', 'LCV', 'PC', 'MOT', 'BUS']))]\
                 .groupby(['vehicle_class', 'road_type','date'])['daily_value'].median()
-        #_daily_median = self.fill_gaps(df = _daily_median,
-                                      # categories = ['vehicle_class','road_type'],
-                                      # value_column = 'daily_value')
+        _daily_median = self.fill_gaps(df = _daily_median,
+                                       categories = ['vehicle_class','road_type'],
+                                       value_column = 'daily_value')
         # TODO Clarify why we need to apply the median again
-       #_daily_median = _daily_median.groupby(['vehicle_class','road_type','date'])['daily_value'].median()
+        _daily_median = _daily_median.groupby(['vehicle_class','road_type','date'])['daily_value'].median()
         
         _sum_cnt = pd.concat([_daily_median['BUS'],
                               _daily_median['LCV'],
@@ -60,8 +60,8 @@ class TrafficCounts:
         self.annual_cycles = _counting_df_norm[
             (_counting_df_norm['vehicle_class'] == 'SUM')]\
                 .groupby(['road_type','date'])['daily_value'].median()
-        #self.annual_cycles = self.fill_gaps(df = self.annual_cycles, categories = ['road_type'], value_column = 'daily_value')
-        #self.annual_cycles = self.annual_cycles.set_index(['road_type','date'])
+        self.annual_cycles = self.fill_gaps(df = self.annual_cycles, categories = ['road_type'], value_column = 'daily_value')
+        self.annual_cycles = self.annual_cycles.groupby(['road_type','date'])['daily_value'].median()
         # prepare daily cycles
         _irrelevant_rows = ['road_type', 'road_link_id', 'daily_value', 'complete', 'valid']
         _d_cycles = _counting_df.drop(_irrelevant_rows, axis=1).set_index('date')\

@@ -2,12 +2,16 @@
 import numpy as np
 import pandas as pd
 
-def calculate_daily_co2_emissions(date, 
-                                  visum_dict, 
-                                  cycles_obj, 
-                                  hbefa_obj,
+from traffic_counts import TrafficCounts
+from hbefa_hot_emissions import HbefaHotEmissions
+from hbefa_cold_emissions import HbefaColdEmissions
+
+def calculate_daily_co2_emissions(date: str, 
+                                  visum_dict:dict, 
+                                  cycles_obj:TrafficCounts, 
+                                  hbefa_obj:HbefaHotEmissions,
                                   multiply_with_length = True
-                                  ):
+                                  ) -> dict:
     try:
         
         year = int(date[:4]) #convert year to integer
@@ -23,26 +27,23 @@ def calculate_daily_co2_emissions(date,
 
             # get relevant information from the visum model
             dtv_visum = row['dtv_SUM']
-            road_type = row['road_type']
-            hour_capacity = row['hour_capacity']
-            visum_speed = row['speed']
-            visum_slope = row['SLOPE']
             hgv_corr = row['hgv_corr']
             lcv_corr = row['lcv_corr']
+            scaling_road_type = row['scaling_road_type']
             
             # get vehicle shares from counting data
-            hgv_share = vehicle_shares['HGV'][road_type]
-            lcv_share = vehicle_shares['LCV'][road_type]
-            pc_share = vehicle_shares['PC'][road_type]
-            mot_share = vehicle_shares['MOT'][road_type]
-            bus_share = vehicle_shares['BUS'][road_type]
+            hgv_share = vehicle_shares['HGV'][scaling_road_type]
+            lcv_share = vehicle_shares['LCV'][scaling_road_type]
+            pc_share = vehicle_shares['PC'][scaling_road_type]
+            mot_share = vehicle_shares['MOT'][scaling_road_type]
+            bus_share = vehicle_shares['BUS'][scaling_road_type]
             
             # calculate vehicle share correction factor
             k = (1- (hgv_corr * hgv_share)- (lcv_corr * lcv_share)) / (1 - hgv_share - lcv_share)
             
             # calculate vehicle counts and apply vehicle share correction factor
             dtv = dict()
-            dtv_day = dtv_visum * daily_scaling[road_type]
+            dtv_day = dtv_visum * daily_scaling[scaling_road_type]
             dtv.update({'HGV' : (dtv_day * hgv_share * hgv_corr)})
             dtv.update({'LCV' : (dtv_day * lcv_share * lcv_corr)})
             dtv.update({'PC' : (dtv_day * pc_share * k)})
@@ -50,8 +51,13 @@ def calculate_daily_co2_emissions(date,
             dtv.update({'BUS' : (dtv_day * bus_share * k)})
             
             # calculate emissions on the respective road link
-            em = hbefa_obj.calculate_emissions_daily(dtv, diurnal_cycles, road_type,
-                                                visum_speed, visum_slope, hour_capacity, year)
+            em = hbefa_obj.calculate_emissions_daily(dtv_vehicle = dtv,
+                                                     diurnal_cycle_vehicle = diurnal_cycles,
+                                                     road_type = row['road_type'], 
+                                                     hbefa_gradient = row['hbefa_gradient'], 
+                                                     hbefa_speed = row['hbefa_speed'],
+                                                     hour_capacity = row['hour_capacity'], 
+                                                     year = year)
             
             if multiply_with_length:
                 for key, value in em.items():

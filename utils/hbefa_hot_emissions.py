@@ -47,7 +47,7 @@ class HbefaHotEmissions:
                                 'Motorway-City': 'MW-City',
                                 'TrunkRoad/Primary-National': 'Trunk-Nat.', 
                                 'TrunkRoad/Primary-City': 'Trunk-City',
-                                'Distributor/Secondary': 'Distr.',
+                                'Distributor/Secondary': 'Distr',
                                 'Local/Collector': 'Local',
                                 'Access-residential': 'Access'}
     
@@ -199,6 +199,9 @@ class HbefaHotEmissions:
                             emissions_dict[(v,c)] += self.ef_dict[v]['EFA_weighted']\
                                 [year, los_hour, '0%', c] * htv_hour[v]
                         except Exception as e:
+                            print(road_type)
+                            print(hbefa_gradient)
+                            print(hbefa_speed)
                             print('Exception ' + (str(e)))
                             print('Cannot calculate emissions.')
                             return 0
@@ -209,8 +212,8 @@ class HbefaHotEmissions:
                                   dtv_vehicle:dict,
                                   diurnal_cycle_vehicle:pd.DataFrame,
                                   road_type:str,
-                                  speed:int,
-                                  slope:float,
+                                  hbefa_speed:int,
+                                  hbefa_gradient:float,
                                   hour_capacity:int,
                                   year:int) -> dict:
         """Calculate emissions for a full day
@@ -227,11 +230,6 @@ class HbefaHotEmissions:
         Returns:
             dict: calculated emission for each vehicle class, component and hour of the day.
         """
-
-        # convert input parameters to closest parameters available in HEBFA
-        hbefa_gradient = self._convert_hbefa_gradient(slope)
-        hbefa_speed = self._convert_hbefa_speed(road_type = road_type,
-                                                speed = speed)
         
         # caclulate hourly traffic count of each vehicle class
         dtv_array = np.array([dtv_vehicle[v] for v in diurnal_cycle_vehicle.index])
@@ -290,13 +288,12 @@ if __name__ == '__main__':
     diurnal_cycles = cycles.get_hourly_scaling_factors(date='2019-01-02')
     
     t = HbefaHotEmissions()
-
     emissions = t.calculate_emissions_daily(dtv_vehicle = dtv_vehicle_test,
                     hour_capacity = 1000, 
                     diurnal_cycle_vehicle = diurnal_cycles,
-                    road_type = 'Local/Collector', 
-                    speed = 30, 
-                    slope = 2,
+                    road_type = 'Distributor/Secondary', 
+                    hbefa_speed = 60, 
+                    hbefa_gradient = '0%',
                     year = 2019)
     
     print(emissions)

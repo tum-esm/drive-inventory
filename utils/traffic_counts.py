@@ -34,9 +34,6 @@ class TrafficCounts:
         self.vehicle_types = list(_counting_df['vehicle_class'].unique())
         self.vehicle_types.remove('SUM')
         
-        # normalice counting dataframe
-        _counting_df_norm = self._normalize_count(_counting_df)
-        
         # prepare dataframes for vehicle share calculation
         _daily_median = _counting_df[
             (_counting_df['complete']) &
@@ -45,37 +42,38 @@ class TrafficCounts:
         _daily_median = self.fill_gaps(df = _daily_median,
                                        categories = ['vehicle_class','road_type'],
                                        value_column = 'daily_value')
-        # TODO Clarify why we need to apply the median again
         _daily_median = _daily_median.groupby(['vehicle_class','road_type','date'])['daily_value'].median()
-        
         _sum_cnt = pd.concat([_daily_median['BUS'],
                               _daily_median['LCV'],
                               _daily_median['MOT'],
                               _daily_median['PC'],
                               _daily_median['HGV']], axis=1).fillna(0).sum(axis=1)
-        
         self.vehicle_shares = _daily_median/_sum_cnt
         
+        
         # prepare annual cycles
+        # normalice counting dataframe
+        _counting_df_norm = self._normalize_count(_counting_df)
         self.annual_cycles = _counting_df_norm[
             (_counting_df_norm['vehicle_class'] == 'SUM')]\
                 .groupby(['road_type','date'])['daily_value'].median()
         self.annual_cycles = self.fill_gaps(df = self.annual_cycles, categories = ['road_type'], value_column = 'daily_value')
         self.annual_cycles = self.annual_cycles.groupby(['road_type','date'])['daily_value'].median()
+        
+        
         # prepare daily cycles
         _irrelevant_rows = ['road_type', 'road_link_id', 'daily_value', 'complete', 'valid']
         _d_cycles = _counting_df.drop(_irrelevant_rows, axis=1).set_index('date')\
             .groupby(['day_type', 'vehicle_class']).resample('1m').median()
-            
         # normalize daily cycles
         _d_cycles.iloc[:,-24:] = _d_cycles.iloc[:,-24:].div(_d_cycles.iloc[:,-24:].sum(axis =1), axis = 0)
         _d_cycles = _d_cycles.reset_index()
         _d_cycles.insert(2, 'month', _d_cycles['date'].dt.month)
         _d_cycles.insert(2, 'year', _d_cycles['date'].dt.year)
         _d_cycles = _d_cycles.drop('date', axis = 1)
-        
         self.daily_cycles = _d_cycles.set_index(
             ['year', 'month', 'day_type', 'vehicle_class'])
+                
                 
         # prepare combined timeprofiles
         self.timeprofile = dict()
@@ -110,6 +108,8 @@ class TrafficCounts:
                     diurnal_cycle = self.get_hourly_scaling_factors(datestring).loc[vc]
                     diurnal_cycle = diurnal_cycle * activity * share
                     df[vc] = np.array(diurnal_cycle)
+                
+                df['SUM'] = np.array(activity * weighted_diurnal_cycle) 
             except:
                 for vc in self.vehicle_types:
                     # if no valid data is available

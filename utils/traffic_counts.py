@@ -42,11 +42,12 @@ class TrafficCounts:
             (_counting_df['complete']) &
             (_counting_df['vehicle_class'].isin(['HGV', 'LCV', 'PC', 'MOT', 'BUS']))]\
                 .groupby(['vehicle_class', 'road_type','date'])['daily_value'].median()
-        # TODO -> gapfill daily median dataframe
-        print(_daily_median)
-        _daily_median = self.fill_gaps(df = _daily_median,categories = ['vehicle_class','road_type'], value_column = 'daily_value')
-        _daily_median = _daily_median.groupby(['vehicle_class', 'road_type','date'])['daily_value'].median()
-        print(_daily_median)
+        #_daily_median = self.fill_gaps(df = _daily_median,
+                                      # categories = ['vehicle_class','road_type'],
+                                      # value_column = 'daily_value')
+        # TODO Clarify why we need to apply the median again
+       #_daily_median = _daily_median.groupby(['vehicle_class','road_type','date'])['daily_value'].median()
+        
         _sum_cnt = pd.concat([_daily_median['BUS'],
                               _daily_median['LCV'],
                               _daily_median['MOT'],
@@ -59,9 +60,8 @@ class TrafficCounts:
         self.annual_cycles = _counting_df_norm[
             (_counting_df_norm['vehicle_class'] == 'SUM')]\
                 .groupby(['road_type','date'])['daily_value'].median()
-        # TODO -> gapfill annual cycles
-        self.annual_cycles = self.fill_gaps(df = self.annual_cycles,categories = ['road_type'], value_column = 'daily_value')
-        self.annual_cycles = self.annual_cycles.set_index(['road_type','date'])
+        #self.annual_cycles = self.fill_gaps(df = self.annual_cycles, categories = ['road_type'], value_column = 'daily_value')
+        #self.annual_cycles = self.annual_cycles.set_index(['road_type','date'])
         # prepare daily cycles
         _irrelevant_rows = ['road_type', 'road_link_id', 'daily_value', 'complete', 'valid']
         _d_cycles = _counting_df.drop(_irrelevant_rows, axis=1).set_index('date')\
@@ -80,7 +80,7 @@ class TrafficCounts:
         # prepare combined timeprofiles
         self.timeprofile = dict()
         for road_type in self.road_types:
-            self.timeprofile.update({road_type:self._combine_time_profile(road_type)})
+           self.timeprofile.update({road_type:self._combine_time_profile(road_type)})
             
     
     def _combine_time_profile(self, road_type:str) -> pd.DataFrame:
@@ -139,7 +139,6 @@ class TrafficCounts:
     def _normalize_count(self,
                          df:pd.DataFrame) -> pd.DataFrame:
         """Normalizes all complete counting time series to their 2019 weekday reference.
-        
         Args:
             df (pd.DataFrame): traffic counting data
         Returns:
@@ -160,7 +159,7 @@ class TrafficCounts:
 
 
     def get_daily_scaling_factors(self,
-                                 date: str) -> pd.Series:
+                                 date: datetime) -> pd.Series:
         """returns daily scaling factor of all road types as pd.Series
         Args:
             date (str): date string
@@ -217,8 +216,8 @@ class TrafficCounts:
         df = df.reset_index()
   
         filled_df = pd.DataFrame()
-        # Creating a date range from 2019-01-01 to 2022-12-31
-        date_range = pd.date_range(start=df['date'].min(), end='2022-12-31')
+        # Creating a date range from minimum to the maximum date of the dataframe
+        date_range = pd.date_range(start=df['date'].min(), end=df['date'].max())
 
         # Create a template DataFrame with all combinations of categories and date
         unique_categories = [df[category].unique() for category in categories]
@@ -233,42 +232,45 @@ class TrafficCounts:
         for category_values in product(*unique_categories):
                 filter_condition = np.logical_and.reduce([merged_df[cat] == val for cat, val in zip(categories, category_values)])
                 train_set = merged_df.loc[filter_condition].copy()
-                unchanged_set = merged_df.loc[filter_condition].copy()
                 first_non_nan = train_set[value_column].first_valid_index()
                 day_types = {date:self.cal.get_day_type_combined(date) for date in train_set['date']}
                 train_set.insert(3, 'day_type',train_set['date'].map(day_types))
                 if first_non_nan is not None:
                     # Extract year and month from the date column
                     train_set['year'] = train_set['date'].dt.year
-                    train_set['month'] = train_set['date'].dt.month
+                    train_set['weeknumber'] = train_set['date'].dt.isocalendar().week
 
                     # Group by year, month, and day_type, then calculate the mean
-                    mean_cycle_values = train_set.groupby(['year', 'month', 'day_type'])[value_column].mean()
+                    mean_cycle_values = train_set.groupby(['year', 'weeknumber', 'day_type'])[value_column].mean()
                     # Flatten the multi-index DataFrame
                     mean_cycle_values = mean_cycle_values.reset_index()
 
                     # Ensure that the DataFrame is sorted
-                    mean_cycle_values.sort_values(by=['year', 'day_type', 'month'], inplace=True)
-                    mean_cycle_values.set_index(['year', 'day_type', 'month'], inplace=True)
+                    mean_cycle_values.sort_values(by=['year', 'day_type', 'weeknumber'], inplace=True)
+                    mean_cycle_values.set_index(['year', 'day_type', 'weeknumber'], inplace=True)
 
                     # Calculate the rolling mean including one month before and after
-                    mean_cycle_values = mean_cycle_values[value_column].shift(1).rolling(window=3, min_periods=1).mean().shift(-2)
+                    # TODO Clarify how the shifts work and optimize
+                    previous_weeks = 2
+                    following_weeks = 1
+                    mean_cycle_values = mean_cycle_values[value_column].shift(previous_weeks).rolling(window=(previous_weeks + following_weeks + 1), min_periods=1).mean().shift(-previous_weeks)
                     mean_cycle_values.bfill(inplace=True)
 
                     # Reset the index of mean_cycle_values
                     mean_cycle_values = mean_cycle_values.reset_index()
 
                     # Merge mean_cycle_values with avg_method
-                    train_set = pd.merge(train_set, mean_cycle_values, on=['year', 'day_type', 'month'], how='left', suffixes=('', '_mean'))
+                    train_set = pd.merge(train_set, mean_cycle_values,
+                                         on=['year', 'day_type', 'weeknumber'],
+                                         how='left', suffixes=('', '_mean'))
 
                     # Fill NaN values in avg_method's daily_value with the mean values
                     train_set['daily_value'].fillna(train_set[value_column+'_mean'], inplace=True)
 
                     # Optionally, if you don't want to keep the extra column:
                     train_set=train_set.reset_index()
-                    train_set.drop(columns=[value_column+'_mean','year','month','day_type','index'], inplace=True)
+                    train_set.drop(columns=[value_column+'_mean','year','weeknumber','day_type','index'], inplace=True)
         
-
                     filled_df = pd.concat([filled_df, train_set])
 
                     train_set.set_index('date', inplace=True)

@@ -50,7 +50,6 @@ class TrafficCounts:
                               _daily_median['HGV']], axis=1).fillna(0).sum(axis=1)
         self.vehicle_shares = _daily_median/_sum_cnt
         
-        
         # prepare annual cycles
         # normalice counting dataframe
         _counting_df_norm = self._normalize_count(_counting_df)
@@ -59,7 +58,6 @@ class TrafficCounts:
                 .groupby(['road_type','date'])['daily_value'].median()
         self.annual_cycles = self.fill_gaps(df = self.annual_cycles, categories = ['road_type'], value_column = 'daily_value')
         self.annual_cycles = self.annual_cycles.groupby(['road_type','date'])['daily_value'].median()
-        
         
         # prepare daily cycles
         _irrelevant_rows = ['road_type', 'road_link_id', 'daily_value', 'complete', 'valid']
@@ -108,8 +106,6 @@ class TrafficCounts:
                     diurnal_cycle = self.get_hourly_scaling_factors(datestring).loc[vc]
                     diurnal_cycle = diurnal_cycle * activity * share
                     df[vc] = np.array(diurnal_cycle)
-                
-                df['SUM'] = np.array(activity * weighted_diurnal_cycle) 
             except:
                 for vc in self.vehicle_types:
                     # if no valid data is available
@@ -250,10 +246,12 @@ class TrafficCounts:
                     mean_cycle_values.set_index(['year', 'day_type', 'weeknumber'], inplace=True)
 
                     # Calculate the rolling mean including one month before and after
-                    # TODO Clarify how the shifts work and optimize
                     previous_weeks = 2
                     following_weeks = 1
-                    mean_cycle_values = mean_cycle_values[value_column].shift(previous_weeks).rolling(window=(previous_weeks + following_weeks + 1), min_periods=1).mean().shift(-previous_weeks)
+                    mean_cycle_values = mean_cycle_values[value_column]\
+                        .shift(previous_weeks)\
+                            .rolling(window=(previous_weeks + following_weeks + 1), min_periods=1).mean()\
+                                .shift(-previous_weeks)
                     mean_cycle_values.bfill(inplace=True)
 
                     # Reset the index of mean_cycle_values

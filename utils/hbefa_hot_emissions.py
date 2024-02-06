@@ -25,16 +25,14 @@ class HbefaHotEmissions:
     components = ['CO', 'NOx', 'PM', 'CO2(rep)', 'CO2(total)', 
                   'NO2', 'CH4', 'BC (exhaust)', 'CO2e']
     
-    components = ['CO2(total)']
-    
-    # TODO Update threshols -> literature research/ use counting data
-    service_thresholds = {'Motorway-Nat': [75, 80, 95, 100],
-                          'Motorway-City': [75, 80, 95, 100],
-                          'TrunkRoad/Primary-National': [50, 80, 90, 100],
-                          'TrunkRoad/Primary-City': [75, 80, 95, 100],
-                          'Distributor/Secondary': [50, 80, 90, 100],
-                          'Local/Collector': [60, 80, 90, 100],
-                          'Access-residential': [60, 80, 90, 100]}
+    # thresholds acquired from different sources and expert assessments
+    service_thresholds = {'Motorway-Nat': [0.55, 0.8, 0.95, 1],
+                          'Motorway-City': [0.55, 0.8, 0.95, 1],
+                          'TrunkRoad/Primary-National': [0.55, 0.8, 0.95, 1],
+                          'TrunkRoad/Primary-City': [0.55, 0.8, 0.95, 1],
+                          'Distributor/Secondary': [0.4, 0.8, 0.9, 1],
+                          'Local/Collector': [0.4, 0.8, 0.9, 1],
+                          'Access-residential': [0.4, 0.8, 0.9, 1]}
     
     # level-of-service classes in HBEFA
     service_class = {0 : 'Freeflow',
@@ -45,7 +43,7 @@ class HbefaHotEmissions:
 
     hbefa_road_abbreviations = {'Motorway-Nat': 'MW-Nat.',
                                 'Motorway-City': 'MW-City',
-                                'TrunkRoad/Primary-National': 'Trunk-Nat.', 
+                                'TrunkRoad/Primary-National': 'Trunk-Nat.',
                                 'TrunkRoad/Primary-City': 'Trunk-City',
                                 'Distributor/Secondary': 'Distr',
                                 'Local/Collector': 'Local',
@@ -55,13 +53,11 @@ class HbefaHotEmissions:
                  'Motorway': 'MW', 
                  'Rural': 'RUR'}
     
-    
     # multipliers to calculate the daily traffic volume as car units 
-    # -> 1 Heavy truck equals to 3 car units
-    #TODO Check HBS for exact values and cite them
-    car_unit_factors = {'HGV': 3, 
-                        'BUS': 3, 
-                        'LCV':2, 
+    # according to HBS 2015
+    car_unit_factors = {'HGV': 1.75, 
+                        'BUS': 1.75, 
+                        'LCV':1, 
                         'PC':1, 
                         'MOT':1}
 
@@ -120,7 +116,7 @@ class HbefaHotEmissions:
             str: HBEFA definition of the traffic situation
         """      
         praeamble  = "URB"
-        vc_ratio = (htv_car_unit / hour_capacity) * 100 #hourly volume capacity ratio [%]
+        vc_ratio = (htv_car_unit / hour_capacity) #hourly volume capacity ratio [%]
 
         iterator = 0 # used to access the right service class
         # calculate category based on treshold provided in "service_thresholds"

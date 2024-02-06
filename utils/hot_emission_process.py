@@ -1,31 +1,47 @@
 # this function was exported to allow multiprocessing.
-import numpy as np
-import pandas as pd
+from multiprocessing import Queue
 
 from traffic_counts import TrafficCounts
 from hbefa_hot_emissions import HbefaHotEmissions
-from hbefa_cold_emissions import HbefaColdEmissions
 
-def calculate_daily_co2_emissions(date: str, 
-                                  visum_dict:dict, 
-                                  cycles_obj:TrafficCounts, 
-                                  hbefa_obj:HbefaHotEmissions,
-                                  multiply_with_length = True
-                                  ) -> dict:
+def process_daily_emissions(date: str,
+                            visum_dict:dict,
+                            cycles_obj:TrafficCounts,
+                            hbefa_obj:HbefaHotEmissions,
+                            result_queue: Queue,
+                            error_queue: Queue,
+                            ) -> bool:
+    """Function to calculate daily emissions for a given date. 
+    This implements the HbefaHotEmissions object and can be run as parallell processes.
+
+    Args:
+        date (str): day to be calculated
+        visum_dict (dict): traffic model as dict for faster looping
+        cycles_obj (TrafficCounts): object to access traffic cycles
+        hbefa_obj (HbefaHotEmissions): object to access emission factors
+        result_queue (Queue): results
+        error_queue (Queue): errors
+        multiply_with_length (bool, optional): if True, mutliplies with road length 
+        to acquire total Emissions. Defaults to True.
+
+    Returns:
+        bool: true if process finished without error, false if not.
+    """
     try:
         
         year = int(date[:4]) #convert year to integer
         
+        # get scaling factors for the day
         diurnal_cycles = cycles_obj.get_hourly_scaling_factors(date=date)
         vehicle_shares = cycles_obj.get_vehicle_share(date=date).to_dict()
         daily_scaling = cycles_obj.get_daily_scaling_factors(date=date).to_dict()
 
-        em_sum_dict = dict()
+        em_sum_dict = dict() # initialize result dict
         
         # loop over visum model
         for row in visum_dict:
-
-            # get relevant information from the visum model
+            
+            # relevant information from the visum model
             dtv_visum = row['dtv_SUM']
             hgv_corr = row['hgv_corr']
             lcv_corr = row['lcv_corr']
@@ -59,50 +75,24 @@ def calculate_daily_co2_emissions(date: str,
                                                      hour_capacity = row['hour_capacity'], 
                                                      year = year)
             
-            if multiply_with_length:
-                for key, value in em.items():
-                    em[key] = value * row['geometry'].length/1000
-                em_sum_dict.update({row['index']:em})
-            else: 
-                em_sum_dict.update({row['index']:em})
-        
-        print('Finished '+ date)
-        return em_sum_dict
+            em_sum_dict.update({row['index']:em}) # add emmissions to emission dict
+
+            
+        print('Finished calculating '+ date)
+        # add emissions to queued result 
+        if result_queue.empty():
+            result_queue.put(em_sum_dict)
+        else:
+            old_result = result_queue.get_nowait()
+            for road_index, emissions in old_result.items():
+                for component, value in emissions.items():
+                    add_emissions = em_sum_dict[road_index][component]
+                    old_result[road_index][component] += add_emissions
+            result_queue.put(old_result)
+        return True
     
     except Exception as e:
+        error_queue.put({date:e})
         print('Cannot process '+ date )
-        print('Error: ' + str(e))
-        return 0
+        return False
     
-    
-def calculate_coldstart_emissions(date, 
-                                  counts, 
-                                  activity, 
-                                  visum_zones, 
-                                  temperature,
-                                  cs_obj):
-    
-    print('Process ' +date)
-    
-    datestring = date
-    year = int(date[:4])
-    daily_emissions = list()
-    
-    # calculate hourly starts
-    diurnal_cycle_PC = counts.get_hourly_scaling_factors(date = datestring).loc['PC']
-    daily_starts = visum_zones['qv_pkw'] * activity[date]
-    hourly_starts = np.vstack(daily_starts.to_numpy()) * diurnal_cycle_PC.to_numpy()
-    
-    # temperature_profile
-    temperture_profile = temperature.loc[datestring].to_numpy()
-    
-    #daily_emissions = list()
-    for row in hourly_starts:
-        em = cs_obj.calculate_emission_daily(hourly_temperature=temperture_profile, 
-                                         hourly_starts = row, 
-                                         vehicle_class='pass. car', 
-                                         year = year)
-        
-        daily_emissions.append(em)
-    
-    return pd.concat(daily_emissions, axis=1).sum(axis =1)

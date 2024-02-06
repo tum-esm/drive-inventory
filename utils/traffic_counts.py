@@ -74,9 +74,9 @@ class TrafficCounts:
                 
                 
         # prepare combined timeprofiles
-        self.timeprofile = dict()
-        for road_type in self.road_types:
-           self.timeprofile.update({road_type:self._combine_time_profile(road_type)})
+        #self.timeprofile = dict()
+        #for road_type in self.road_types:
+           #self.timeprofile.update({road_type:self._combine_time_profile(road_type)})
             
     
     def _combine_time_profile(self, road_type:str) -> pd.DataFrame:

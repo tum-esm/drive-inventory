@@ -10,6 +10,7 @@ MUNICH_BOARDERS_FILE = abs_path + "/data/geodata/munich_boarders.gpkg"
 MUNICH_BOARDERS_EXTENDED_FILE = abs_path + "/data/geodata/munich_boarders_extended.gpkg" # also includes the motorway around Munich
 TNO_100M_GRID  = abs_path + "/data/geodata/TNO_100m_grid.gpkg"
 ALKIS_MUNICH = abs_path + "/data/geodata/ALKIS_Munich/Nutzung.shp"
+
 # visum path
 VISUM_FOLDER_PATH = abs_path + "/data/restricted_input/visum/"
 
@@ -25,3 +26,6 @@ EF_LCV = abs_path + "/data/restricted_input/hbefa/EFA_HOT_Vehcat_LCV.XLS"
 EF_HGV = abs_path + "/data/restricted_input/hbefa/EFA_HOT_Vehcat_HGV.XLS"
 EF_MOT = abs_path + "/data/restricted_input/hbefa/EFA_HOT_Vehcat_MOT.XLS"
 EF_ColdStart = abs_path + "/data/restricted_input/hbefa/EFA_ColdStart_Vehcat_ColdStart.XLS"
+
+# emission inventory
+INVENTORY_FOLDER_PATH = abs_path + "/data/inventory/"

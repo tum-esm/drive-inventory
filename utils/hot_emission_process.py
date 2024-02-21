@@ -83,7 +83,7 @@ def process_daily_emissions(date: str,
         if result_queue.empty():
             result_queue.put(em_sum_dict)
         else:
-            old_result = result_queue.get_nowait()
+            old_result = result_queue.get(timeout=60)
             for road_index, emissions in old_result.items():
                 for component, value in emissions.items():
                     add_emissions = em_sum_dict[road_index][component]

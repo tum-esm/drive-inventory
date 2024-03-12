@@ -5,9 +5,8 @@ __author__ = ['Ali Ahmad Khan', 'Daniel Kühbacher']
 
 import pandas as pd
 import numpy as np
-from itertools import product
-from statsmodels.tsa.arima.model import ARIMA
 
+from itertools import product
 from datetime import datetime
 
 import data_paths
@@ -17,7 +16,7 @@ class TrafficCounts:
     """ Reads combined counting data calculates and provides an interface to the traffic cycles.
     """
 
-    def __init__(self):
+    def __init__(self, init_timeprofile = True):
         """__summary__
         """
         # initialize calendar
@@ -30,41 +29,52 @@ class TrafficCounts:
         # get information from the counting data
         self.date_start = _counting_df['date'].min()
         self.date_end = _counting_df['date'].max()
-        self.road_types = list(_counting_df['road_type'].unique())
+        self.road_types = list(_counting_df['scaling_road_type'].unique())
         self.vehicle_types = list(_counting_df['vehicle_class'].unique())
         self.vehicle_types.remove('SUM')
         
         # prepare dataframes for vehicle share calculation
-        _daily_median = _counting_df[
-            (_counting_df['complete']) &
-            (_counting_df['vehicle_class'].isin(['HGV', 'LCV', 'PC', 'MOT', 'BUS']))]\
-                .groupby(['vehicle_class', 'road_type','date'])['daily_value'].median()
+        _daily_median = _counting_df[(_counting_df['complete']) &
+                                     (_counting_df['valid']) &
+                                     (_counting_df['vehicle_class'].isin(self.vehicle_types))]\
+                                         .groupby(['vehicle_class',
+                                                   'scaling_road_type',
+                                                   'date'])['daily_value'].median()                   
         _daily_median = self.fill_gaps(df = _daily_median,
-                                       categories = ['vehicle_class','road_type'],
+                                       categories = ['vehicle_class', 'scaling_road_type'],
                                        value_column = 'daily_value')
-        _daily_median = _daily_median.groupby(['vehicle_class','road_type','date'])['daily_value'].median()
+        _daily_median = _daily_median.groupby(['vehicle_class', 
+                                               'scaling_road_type',
+                                               'date'])['daily_value'].median()
         _sum_cnt = pd.concat([_daily_median['BUS'],
                               _daily_median['LCV'],
                               _daily_median['MOT'],
                               _daily_median['PC'],
-                              _daily_median['HGV']], axis=1).fillna(0).sum(axis=1)
+                              _daily_median['HGV']],axis=1).fillna(0).sum(axis=1)
         self.vehicle_shares = _daily_median/_sum_cnt
-        
+    
         # prepare annual cycles
-        # normalice counting dataframe
+        # normalize counting dataframe
         _counting_df_norm = self._normalize_count(_counting_df)
         self.annual_cycles = _counting_df_norm[
             (_counting_df_norm['vehicle_class'] == 'SUM')]\
-                .groupby(['road_type','date'])['daily_value'].median()
-        self.annual_cycles = self.fill_gaps(df = self.annual_cycles, categories = ['road_type'], value_column = 'daily_value')
-        self.annual_cycles = self.annual_cycles.groupby(['road_type','date'])['daily_value'].median()
+                .groupby(['scaling_road_type','date'])['daily_value'].median()
+        self.annual_cycles = self.fill_gaps(df = self.annual_cycles,
+                                            categories = ['scaling_road_type'],
+                                            value_column = 'daily_value')
+        self.annual_cycles = self.annual_cycles.groupby(['scaling_road_type',
+                                                         'date'])['daily_value'].median()
         
         # prepare daily cycles
-        _irrelevant_rows = ['road_type', 'road_link_id', 'daily_value', 'complete', 'valid']
+        _irrelevant_rows = ['scaling_road_type', 'road_type', 'road_link_id',
+                            'daily_value', 'complete', 'valid']
+        hour_column_names = [str(i) for i in range(0,24)]
+        
         _d_cycles = _counting_df.drop(_irrelevant_rows, axis=1).set_index('date')\
-            .groupby(['day_type', 'vehicle_class']).resample('1m').median()
+            .groupby(['day_type', 'vehicle_class'])[hour_column_names].resample('1m').median()
+            
         # normalize daily cycles
-        _d_cycles.iloc[:,-24:] = _d_cycles.iloc[:,-24:].div(_d_cycles.iloc[:,-24:].sum(axis =1), axis = 0)
+        _d_cycles[hour_column_names] = _d_cycles[hour_column_names].div(_d_cycles[hour_column_names].sum(axis= 1), axis = 0)
         _d_cycles = _d_cycles.reset_index()
         _d_cycles.insert(2, 'month', _d_cycles['date'].dt.month)
         _d_cycles.insert(2, 'year', _d_cycles['date'].dt.year)
@@ -72,12 +82,12 @@ class TrafficCounts:
         self.daily_cycles = _d_cycles.set_index(
             ['year', 'month', 'day_type', 'vehicle_class'])
                 
-                
         # prepare combined timeprofiles
-        self.timeprofile = dict()
-        for road_type in self.road_types:
-           self.timeprofile.update({road_type:self._combine_time_profile(road_type)})
-            
+        if init_timeprofile:
+            self.timeprofile = dict()
+            for rt in self.road_types:
+                self.timeprofile.update({rt:self._combine_time_profile(rt)})
+           
     
     def _combine_time_profile(self, road_type:str) -> pd.DataFrame:
         """Combines annual activity,vehicle share and daily cycles to a hourly profile
@@ -169,7 +179,7 @@ class TrafficCounts:
 
     def get_vehicle_share(self,
                            date:str) -> pd.DataFrame:
-        """returns dataframe with vehicle shares of different vehicle types and road types s
+        """returns dataframe with vehicle shares of different vehicle types and road types
 
         Args:
             date (str): _description_
@@ -179,7 +189,7 @@ class TrafficCounts:
         """
         # Calculates Vehicles Sharefor all dates 
         shares = self.vehicle_shares[:,date,:].reset_index()
-        shares = shares.pivot(columns='vehicle_class', index ='road_type', values = 0)
+        shares = shares.pivot(columns='vehicle_class', index ='scaling_road_type', values = 0)
         return shares
 
 
@@ -281,6 +291,6 @@ class TrafficCounts:
 
 if __name__ == "__main__":
     count = TrafficCounts()
-    print("Alpha: \n", count.get_daily_scaling_factors(date = '2022-01-01'))
-    print("Gamma: \n", count.get_vehicle_share(date = '2022-01-01'))
-    print("Beta: \n", count.get_hourly_scaling_factors('2022-01-01'))
+    print("Alpha: \n", count.get_daily_scaling_factors(date = '2022-12-01'))
+    print("Gamma: \n", count.get_vehicle_share(date = '2022-12-01'))
+    print("Beta: \n", count.get_hourly_scaling_factors('2022-12-01'))

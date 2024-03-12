@@ -20,6 +20,7 @@ MST_COUNTING_PATH = abs_path + "/data/restricted_input/counting_data/lhm/"
 BAST_COUNTING_PATH = abs_path + "/data/restricted_input/counting_data/bast/"
 
 #emission factors
+EF_path = abs_path + "/data/restricted_input/hbefa/"
 EF_BUS = abs_path + "/data/restricted_input/hbefa/EFA_HOT_Vehcat_Coach.XLS"
 EF_PC = abs_path + "/data/restricted_input/hbefa/EFA_HOT_Vehcat_PC.XLS"
 EF_LCV = abs_path + "/data/restricted_input/hbefa/EFA_HOT_Vehcat_LCV.XLS"

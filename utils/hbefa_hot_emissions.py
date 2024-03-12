@@ -105,8 +105,8 @@ class HbefaHotEmissions:
             print(f'Could not load table from {filepath}\n')
             print(e)
             return None
-    
-    
+
+
     def calc_los_class(self, 
                        htv_car_unit:float,
                        hour_capacity:float, 
@@ -135,8 +135,8 @@ class HbefaHotEmissions:
         
         los = f'{praeamble}/{HbefaHotEmissions.hbefa_road_abbreviations[road_type]}/{str(hbefa_speed)}/{HbefaHotEmissions.service_class[iterator]}'
         return los
-    
-    
+
+
     def calculate_emissions_daily(self,
                                   dtv_vehicle:dict,
                                   diurnal_cycle_vehicle:pd.DataFrame,
@@ -195,13 +195,30 @@ class HbefaHotEmissions:
             for v in HbefaHotEmissions.vehicle_classes:
                 for c in HbefaHotEmissions.components:
                     try:
-                        emissions_dict[(v,c)] += self.ef_dict[v]['EFA_weighted']\
-                            [year, los_hour, hbefa_gradient, c] * htv_hour[v]
-                    except: 
+                        if str(los_hour).split('/')[-1] == 'St+Go': 
+                            emission_1 = self.ef_dict[v]['EFA_weighted']\
+                                [year, los_hour, hbefa_gradient, c] * htv_hour[v]
+                            emission_2 = self.ef_dict[v]['EFA_weighted']\
+                                [year, los_hour+'2', hbefa_gradient, c] * htv_hour[v] #St+Go2 emission
+                            emission = 0.67 * emission_1 + 0.33 * emission_2 # total emission is 2/3 St+Go and and 1/3 St+Go2 Emission
+                        else:
+                            emission = self.ef_dict[v]['EFA_weighted']\
+                                [year, los_hour, hbefa_gradient, c] * htv_hour[v]
+                        emissions_dict[(v,c)] += emission
+                        
+                    except: # some gradient values are missing which could cause errors
                         try:
-                            # some gradient values are missing which could cause errors
-                            emissions_dict[(v,c)] += self.ef_dict[v]['EFA_weighted']\
-                                [year, los_hour, '0%', c] * htv_hour[v]
+                            if str(los_hour).split('/')[-1] == 'St+Go':
+                                emission_1 = self.ef_dict[v]['EFA_weighted']\
+                                    [year, los_hour, '0%', c] * htv_hour[v]
+                                emission_2 = self.ef_dict[v]['EFA_weighted']\
+                                    [year, los_hour+'2', '0%', c] * htv_hour[v] #St+Go2 emission
+                                emission = 0.67 * emission_1 + 0.33 * emission_2
+                            else:
+                                emission = self.ef_dict[v]['EFA_weighted']\
+                                    [year, los_hour, '0%', c] * htv_hour[v]
+                            emissions_dict[(v,c)] += emission
+                                
                         except Exception as e:
                             print(road_type)
                             print(hbefa_gradient)
@@ -210,6 +227,7 @@ class HbefaHotEmissions:
                             print('Cannot calculate emissions.')
                             return 0
         return emissions_dict
+
 
     def calculate_emissions_hourly(self,
                                   dtv_vehicle:dict,
@@ -271,13 +289,30 @@ class HbefaHotEmissions:
             for v in HbefaHotEmissions.vehicle_classes:
                 for c in HbefaHotEmissions.components:
                     try:
-                        emissions_dict[(v,c,i)] = self.ef_dict[v]['EFA_weighted']\
-                            [year, los_hour, hbefa_gradient, c] * htv_hour[v] ##-> just return hourly emission factor
-                    except: 
-                        try:
-                            # some gradient values are missing which could cause errors
-                            emissions_dict[(v,c,i)] = self.ef_dict[v]['EFA_weighted']\
-                                [year, los_hour, '0%', c] * htv_hour[v] ##-> just return hourly emission factor
+                        if str(los_hour).split('/')[-1] == 'St+Go':
+                            emission_1 = self.ef_dict[v]['EFA_weighted']\
+                                [year, los_hour, hbefa_gradient, c] * htv_hour[v]
+                            emission_2 = self.ef_dict[v]['EFA_weighted']\
+                                [year, los_hour+'2', hbefa_gradient, c] * htv_hour[v] #St+Go2 emission
+                            emission = 0.67 * emission_1 + 0.33 * emission_2
+                        else:
+                            emission = self.ef_dict[v]['EFA_weighted']\
+                                    [year, los_hour, hbefa_gradient, c] * htv_hour[v]
+                        emissions_dict[(v,c,i)] = emission
+                        
+                    except: # some gradient values are missing which could cause errors
+                        try: 
+                            if str(los_hour).split('/')[-1] == 'St+Go':
+                                emission_1 = self.ef_dict[v]['EFA_weighted']\
+                                    [year, los_hour, '0%', c] * htv_hour[v]
+                                emission_2 = self.ef_dict[v]['EFA_weighted']\
+                                    [year, los_hour+'2', '0%', c] * htv_hour[v] #St+Go2 emission
+                                emission = 0.67 * emission_1 + 0.33 * emission_2
+                            else:
+                                emission = self.ef_dict[v]['EFA_weighted']\
+                                        [year, los_hour, '0%', c] * htv_hour[v]
+                            emissions_dict[(v,c,i)] = emission
+ 
                         except Exception as e:
                             print(road_type)
                             print(hbefa_gradient)
@@ -286,7 +321,7 @@ class HbefaHotEmissions:
                             print('Cannot calculate emissions.')
                             return 0
         return emissions_dict
-        
+
 
 if __name__ == '__main__':
     # test the function
@@ -296,16 +331,16 @@ if __name__ == '__main__':
                     'MOT': 100, 
                     'BUS': 50}
     
-    cycles = TrafficCounts()
+    cycles = TrafficCounts(init_timeprofile=False)
     diurnal_cycles = cycles.get_hourly_scaling_factors(date='2019-03-23')
     
     t = HbefaHotEmissions()
-    emissions = t.calculate_emissions_hourly(dtv_vehicle = dtv_vehicle_test,
+    emissions = t.calculate_emissions_daily(dtv_vehicle = dtv_vehicle_test,
                     hour_capacity = 1000, 
                     diurnal_cycle_vehicle = diurnal_cycles,
                     road_type = 'Distributor/Secondary', 
-                    hbefa_speed = 60, 
+                    hbefa_speed = 70, 
                     hbefa_gradient = '0%',
                     year = 2019)
-    
+
     print(emissions)

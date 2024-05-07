@@ -1,6 +1,8 @@
 data/restricted_input/counting_data/bast/temp
 data/restricted_input/counting_data/bast/temp_raw
 data/restricted_input/counting_data/lhm/location_details
+data/inventory/*
+data/restricted_input/*
 
 *.csv
 

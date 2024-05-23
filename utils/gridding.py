@@ -85,7 +85,7 @@ class GriddingEngine:
 
     def overlay_grid(self, 
                      geom_input:gpd.GeoDataFrame,
-                     value_columns:[list,str],
+                     value_columns:[list, str],
                      source_type:str) ->gpd.GeoDataFrame:
         """Overlay emission sources with grid and calculate gridded product
 
@@ -107,8 +107,10 @@ class GriddingEngine:
         #Calculate total (PROXY) for each segment cut off by the output grid
         if source_type == 'area':
             data_geo['PROXY'] = data_geo.geometry.area
-        elif source_type == 'line': 
+        elif source_type == 'line_meter':
             data_geo['PROXY'] = data_geo.geometry.length
+        elif source_type == 'line_kilometer':
+            data_geo['PROXY'] = data_geo.geometry.length/1000
         else:
             print(f'Ivalid source type {source_type}. Use `area` or `line` instead.')
             return None

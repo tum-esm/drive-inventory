@@ -17,7 +17,7 @@ from traffic_counts import TrafficCounts
 import data_paths
 
 
-class HbefaHotEmissions: 
+class HbefaHotEmissions:
     """Defines HBEFA parameters and classes, imports emission factors and 
     calculates hourly traffic emissions of different vehicle classes and components
     """
@@ -30,24 +30,26 @@ class HbefaHotEmissions:
                                  'MOT': 'motorcycle',
                                  'BUS': 'coach'}
     
-    components = ['CO', 'NOx', 'PM', 'CO2(rep)', 'CO2(total)', 
+    components = ['CO', 'NOx', 'PM', 'CO2(rep)', 'CO2(total)',
                   'NO2', 'CH4', 'BC (exhaust)', 'CO2e']
     
     # thresholds acquired from different sources and expert assessments
-    service_thresholds = {'Motorway-Nat': [0.55, 0.75, 0.9, 1],
-                          'Motorway-City': [0.55, 0.75, 0.9, 1],
-                          'TrunkRoad/Primary-National': [0.55, 0.75, 0.9, 1],
-                          'TrunkRoad/Primary-City': [0.55, 0.75, 0.9, 1],
-                          'Distributor/Secondary': [0.55, 0.75, 0.9, 1],
-                          'Local/Collector': [0.55, 0.75, 0.9, 1],
-                          'Access-residential': [0.55, 0.75, 0.9, 1]}
+    # the secon value is irrelevant since it also results in "Heavy" traffic
+    #'TrunkRoad/Primary-National': [0.25, 0.3, 0.38, 0.45],
+    service_thresholds = {'Motorway-Nat': [0.5, 0.71, 0.98, 1.1], # optimized thresholds
+                          'Motorway-City': [0.55, 0.75, 0.9, 1], # not used
+                          'TrunkRoad/Primary-National': [0.33, 0.5, 0.7, 0.8], # optimized thresholds
+                          'TrunkRoad/Primary-City': [0.67, 0.82, 0.92, 1.02], # optimized thresholds
+                          'Distributor/Secondary': [0.37, 0.5, 0.63, 0.8], # optimized thresholds
+                          'Local/Collector': [0.55, 0.75, 0.9, 1], # not used
+                          'Access-residential': [0.14, 0.25, 0.39, 0.52]} # optimized thresholds
     
     # level-of-service classes in HBEFA
-    service_class = {0 : 'Freeflow',
-                     1 : 'Heavy',
-                     2 : 'Heavy',
-                     3 : 'Satur.',
-                     4 : 'St+Go'}
+    service_class = {0: 'Freeflow',
+                     1: 'Heavy',
+                     2: 'Satur.',
+                     3: 'St+Go',
+                     4: 'St+Go2'}
     
     #assigns LOS classes to hbefa service classes
     los_hbefa_mapping = {'A': 'Freeflow', 
@@ -73,9 +75,9 @@ class HbefaHotEmissions:
     # according to HBS 2015
     car_unit_factors = {'HGV': 2.5, 
                         'BUS': 1.75, 
-                        'LCV':1, 
-                        'PC':1, 
-                        'MOT':1}
+                        'LCV': 1, 
+                        'PC': 1, 
+                        'MOT': 1}
 
 
     def __init__(self):
@@ -89,7 +91,8 @@ class HbefaHotEmissions:
              
         self.ef_aggregated = self._import_hbefa_ef(
             eval(f'data_paths.EF_aggregated_LOS'), 
-            columns_to_keep = ["Year", "Component", "VehCat", "RoadCat", "EFA_weighted"],
+            columns_to_keep = ["Year", "Component", "VehCat",
+                               "RoadCat", "EFA_weighted"],
             index_cols = ['Year', 'RoadCat', 'VehCat','Component']
             )
 
@@ -98,7 +101,8 @@ class HbefaHotEmissions:
                          filepath:str,
                          columns_to_keep:list = ['Year', 'Component', 'TrafficSit',
                                                  'Gradient', 'EFA_weighted'],
-                         index_cols:list = ['Year', 'TrafficSit', 'Gradient','Component']
+                         index_cols:list = ['Year', 'TrafficSit',
+                                            'Gradient','Component']
                          ) -> dict:
         """Import emission factors from HBEFA-exported *.XLS table
         
@@ -110,10 +114,8 @@ class HbefaHotEmissions:
         """
         try:
             workbook = xlrd.open_workbook(filepath,
-                                          logfile = open(os.devnull,
-                                                         "w"))
+                                          logfile = open(os.devnull,"w"))
             df = pd.read_excel(workbook) # read_excel accepts workbooks too
-            
             df = df[columns_to_keep].set_index(index_cols) # reduce to interesting columns
             df_dict = df.to_dict() # convert to dict for faster access
             print(f'Loaded emission factors from {filepath}')
@@ -151,7 +153,8 @@ class HbefaHotEmissions:
                 break
             iterator += 1
         
-        los = f'{praeamble}/{HbefaHotEmissions.hbefa_road_abbreviations[road_type]}/{str(hbefa_speed)}/{HbefaHotEmissions.service_class[iterator]}'
+        los = f'{praeamble}/{HbefaHotEmissions.hbefa_road_abbreviations[road_type]}/\
+            {str(hbefa_speed)}/{HbefaHotEmissions.service_class[iterator]}'
         return los
     
     
@@ -219,30 +222,14 @@ class HbefaHotEmissions:
                 for v in HbefaHotEmissions.vehicle_classes:
                     for c in HbefaHotEmissions.components:
                         try:
-                            if str(los_hour).split('/')[-1] == 'St+Go': 
-                                emission_1 = self.ef_dict[v]['EFA_weighted']\
-                                    [year, los_hour, hbefa_gradient, c] * htv_hour[v]
-                                emission_2 = self.ef_dict[v]['EFA_weighted']\
-                                    [year, los_hour+'2', hbefa_gradient, c] * htv_hour[v] #St+Go2 emission
-                                emission = 0.67 * emission_1 + 0.33 * emission_2 # total emission is 2/3 St+Go and and 1/3 St+Go2 Emission
-                            else:
-                                emission = self.ef_dict[v]['EFA_weighted']\
+                            emission = self.ef_dict[v]['EFA_weighted']\
                                     [year, los_hour, hbefa_gradient, c] * htv_hour[v]
                             emissions_dict[(v,c)] += emission
-                            
                         except: # some gradient values are missing which could cause errors
                             try:
-                                if str(los_hour).split('/')[-1] == 'St+Go':
-                                    emission_1 = self.ef_dict[v]['EFA_weighted']\
-                                        [year, los_hour, '0%', c] * htv_hour[v]
-                                    emission_2 = self.ef_dict[v]['EFA_weighted']\
-                                        [year, los_hour+'2', '0%', c] * htv_hour[v] #St+Go2 emission
-                                    emission = 0.67 * emission_1 + 0.33 * emission_2
-                                else:
-                                    emission = self.ef_dict[v]['EFA_weighted']\
+                                emission = self.ef_dict[v]['EFA_weighted']\
                                         [year, los_hour, '0%', c] * htv_hour[v]
                                 emissions_dict[(v,c)] += emission
-                                    
                             except Exception as e:
                                 print(road_type)
                                 print(hbefa_gradient)
@@ -331,28 +318,14 @@ class HbefaHotEmissions:
             for v in HbefaHotEmissions.vehicle_classes:
                 for c in HbefaHotEmissions.components:
                     try:
-                        if str(los_hour).split('/')[-1] == 'St+Go':
-                            emission_1 = self.ef_dict[v]['EFA_weighted']\
+                        emission = self.ef_dict[v]['EFA_weighted']\
                                 [year, los_hour, hbefa_gradient, c] * htv_hour[v]
-                            emission_2 = self.ef_dict[v]['EFA_weighted']\
-                                [year, los_hour+'2', hbefa_gradient, c] * htv_hour[v] #St+Go2 emission
-                            emission = 0.67 * emission_1 + 0.33 * emission_2
-                        else:
-                            emission = self.ef_dict[v]['EFA_weighted']\
-                                    [year, los_hour, hbefa_gradient, c] * htv_hour[v]
                         emissions_dict[(v,c,i)] = emission
-                        
+
                     except: # some gradient values are missing which could cause errors
                         try: 
-                            if str(los_hour).split('/')[-1] == 'St+Go':
-                                emission_1 = self.ef_dict[v]['EFA_weighted']\
+                            emission = self.ef_dict[v]['EFA_weighted']\
                                     [year, los_hour, '0%', c] * htv_hour[v]
-                                emission_2 = self.ef_dict[v]['EFA_weighted']\
-                                    [year, los_hour+'2', '0%', c] * htv_hour[v] #St+Go2 emission
-                                emission = 0.67 * emission_1 + 0.33 * emission_2
-                            else:
-                                emission = self.ef_dict[v]['EFA_weighted']\
-                                        [year, los_hour, '0%', c] * htv_hour[v]
                             emissions_dict[(v,c,i)] = emission
  
                         except Exception as e:

@@ -10,9 +10,10 @@ import pandas as pd
 import data_paths
 from dateutil.parser import parse
 
-calendar_file_path = data_paths.CALENDER_FILE
 
-class Calendar: 
+
+class Calendar:
+    
     def __init__(self,
                  years:list = [2018, 2019, 2020, 2021, 2022, 2023]) -> None:
         """Initializes the calender object and loads from calender file
@@ -44,7 +45,7 @@ class Calendar:
             pd.DataFrame: Dataframe holing the calendar of a defined year.
         """
         try: 
-            df = pd.read_excel(calendar_file_path, sheet_name=str(year))
+            df = pd.read_excel(data_paths.CALENDER_FILE, sheet_name=str(year))
             df['date'] = pd.to_datetime(df['date'])
             return df
         except Exception as e:

@@ -1,7 +1,8 @@
-"""_summary_
+"""Module to calculate cold start emissions based on HBEFA emission factors,
+temperature and hourly activity profiles. 
 """
     
-__version__ = 0.1
+__version__ = 0.2
 __author__ = "Daniel Kühbacher"
 
 import os
@@ -9,13 +10,15 @@ import os
 import pandas as pd
 import xlrd
 
+from typing import Literal
+
 import data_paths
 
 class HbefaColdEmissions: 
-    """_summary_
+    """Class to calculate cold start emissions based on HBEFA emission factors.
     """
     
-    vehicle_classes = ['PC', 'LCV']
+    vehicle_classes = ['PC', 'LCV'] #no further classes available in HBEFA
     
     components = ['CO', 'NOx', 'PM', 'CO2(rep)', 'CO2(total)', 
                   'NO2', 'CH4', 'BC (exhaust)', 'CO2e']
@@ -24,14 +27,14 @@ class HbefaColdEmissions:
     
     
     def __init__(self):
-        """_summary_
+        """Load cold start emission factors from HBEFA excel file.
         """
         self.emission_factors = self._import_hbefa_coldstart_ef(
             data_paths.EF_ColdStart)
-                
-    
+
+
     def _import_hbefa_coldstart_ef(self,
-                                  filepath:str) -> dict:
+                                   filepath: str) -> dict:
         """Import cold start emission factors from HBEFA-exported *.XLS table
         
         Args:
@@ -44,7 +47,7 @@ class HbefaColdEmissions:
             workbook = xlrd.open_workbook(filepath, logfile=open(os.devnull, "w"))
             df = pd.read_excel(workbook) # read_excel accepts workbooks too
             columns_to_keep = ['VehCat', 'Year', 'Component',
-                            'AmbientCondPattern', 'EFA_weighted']
+                               'AmbientCondPattern', 'EFA_weighted']
 
             # convert Vehicle Categorie to common acronym
             df.loc[df['VehCat']=='pass. car', 'VehCat'] = 'PC'
@@ -58,19 +61,19 @@ class HbefaColdEmissions:
             print(f'Could not load table from {filepath}\n')
             print(e)
             return None
-    
-    
+
+
     def _calc_ambient_condition_pattern(self,
                                        temperature: float) -> str:
-        """_summary_
+        """Calculates ambient conditino pattern to select the right emission factor.
 
         Args:
-            temperature (float): _description_
+            temperature (float): actual ambient temperature
 
         Returns:
-            str: _description_
+            str: Strint representing the ambient condition pattern
         """
-        
+        # calculate closest temperature in HBEFA range
         hbefa_temperature = min(HbefaColdEmissions.temperature_range,
                                 key=lambda x: abs(x - temperature))
         
@@ -82,15 +85,15 @@ class HbefaColdEmissions:
             temp_string = f'T-{abs(hbefa_temperature)}°C'
         else: 
             temp_string = f'T+{abs(hbefa_temperature)}°C'
-        
+        # the return string can be used to access the right emission factor in HBEFA
         return temp_string + ',' + trip_duration + ',' + trip_length
-        
-    
-    def calculate_emission_daily(self,
-                                 hourly_temperature:float,
-                                 vehicle_class:str,
+
+
+    def calculate_emission_hourly(self,
+                                 hourly_temperature: float,
+                                 vehicle_class: Literal['PC', 'LCV'],
                                  year: int) -> float:
-        """_summary_
+        """calculates the daily cold start emission based on ambient condition pattern
 
         Args:
             hourly_temperature (float): _description_
@@ -99,22 +102,24 @@ class HbefaColdEmissions:
             year (int): _description_
 
         Returns:
-            float: _description_
+            float: emissions
         """
         
         amb = self._calc_ambient_condition_pattern(hourly_temperature)
-        em = self.emission_factors.loc[vehicle_class, year,:, amb]['EFA_weighted']
+        em = self.emission_factors.loc[vehicle_class, year, :, amb]['EFA_weighted']
             
         return em
-    
-    
-if __name__ == '__main__': 
+
+
+if __name__ == '__main__':
+    """Example usage and test of the HBEFA cold start emissions class.
+    """
     c = HbefaColdEmissions()
     
     temperature = 23.01
     
-    k = c.calculate_emission_daily(hourly_temperature = temperature,
+    k = c.calculate_emission_hourly(hourly_temperature = temperature,
                                  vehicle_class = 'PC',
                                  year=2019)
-                                 
+    
     print(k)

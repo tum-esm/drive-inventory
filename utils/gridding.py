@@ -9,13 +9,15 @@ import numpy as np
 
 from shapely.geometry import Polygon
 
+from typing import Literal
+
 
 class GriddingEngine:
     """This class provides functions to make grids and perform gridding
     """
     def __init__(self, 
-                 crs:int, 
-                 input_grid:gpd.GeoDataFrame=gpd.GeoDataFrame(),
+                 crs:int,
+                 input_grid: gpd.GeoDataFrame = gpd.GeoDataFrame(),
                  ) -> None:
         """Initialize input grid and CRS
 
@@ -27,10 +29,9 @@ class GriddingEngine:
 
         # define grid from input grid if not none
         self.crs = crs
-        self.grid = input_grid
-        self.grid = input_grid.to_crs(crs)
-
-        
+        if not input_grid.empty:
+            self.grid = input_grid
+            self.grid = input_grid.to_crs(crs)
 
     def make_grid(self, h_step:float, w_step:float, x_min:float, 
                   y_min:float, x_max:float, y_max:float) -> gpd.GeoDataFrame:
@@ -84,9 +85,10 @@ class GriddingEngine:
 
 
     def overlay_grid(self, 
-                     geom_input:gpd.GeoDataFrame,
-                     value_columns:[list, str],
-                     source_type:str) ->gpd.GeoDataFrame:
+                     geom_input : gpd.GeoDataFrame,
+                     value_columns : list|str,
+                     source_type : Literal['area', 'line_meter', 'line_kilometer'])\
+                         -> gpd.GeoDataFrame:
         """Overlay emission sources with grid and calculate gridded product
 
         Args:
@@ -115,11 +117,12 @@ class GriddingEngine:
             print(f'Ivalid source type {source_type}. Use `area` or `line` instead.')
             return None
         
-        if type(value_columns) == list:
+        if isinstance(value_columns, list):
             for col in value_columns: 
                 data_geo[col] = data_geo[col].astype('float') * data_geo['PROXY']
-        elif type(value_columns) == str: 
-            data_geo[value_columns] = data_geo[value_columns].astype('float') * data_geo['PROXY']
+        elif isinstance(value_columns, str): 
+            data_geo[value_columns] = data_geo[value_columns].astype('float') \
+                * data_geo['PROXY']
         else: 
             return None
         
@@ -132,10 +135,10 @@ class GriddingEngine:
         
         return_grid = self.grid.copy()
         
-        if type(value_columns) == list:
+        if isinstance(value_columns, list):
             for col in value_columns:
                 return_grid[col] = em_grouped[col]
-        elif type(value_columns) == str: 
+        elif isinstance(value_columns, str): 
             return_grid[value_columns] = em_grouped[value_columns]
         else:
             return None
@@ -147,10 +150,9 @@ if __name__ == '__main__':
     """Test the function
     """
     
-    gridding_obj = GriddingEngine()
-    gridding_obj.make_grid(1000, 1000, 
+    gridding_obj = GriddingEngine(crs = "EPSG:4326")
+    gridding_obj.make_grid(1000, 1000,
                            x_min = 675000, x_max = 703000,
                            y_min = 5325800, y_max = 5347800)
 
     print(gridding_obj.grid.head())
-

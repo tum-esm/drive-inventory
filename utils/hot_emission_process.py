@@ -1,12 +1,19 @@
-# this function was exported to allow multiprocessing.
+"""This module implements a process to calculate daily emissions for a given date
+by accessing the emission calculation moduls as well as the traffic count. 
+The process can be run in parallel to speed up the calculation process.
+"""
+    
+__version__ = 0.1
+__author__ = "Daniel Kühbacher"
+
 import numpy as np
 from typing import Literal
 from multiprocessing import Queue
 
 from traffic_counts import TrafficCounts
 from hbefa_hot_emissions import HbefaHotEmissions
-    
-    
+
+
 def process_daily_emissions(date: str,
                             mode:Literal['aggregated', 'los_specific'],
                             visum_dict:dict,
@@ -40,9 +47,9 @@ def process_daily_emissions(date: str,
         vehicle_shares = cycles_obj.get_vehicle_share(date=date).to_dict()
         daily_scaling = cycles_obj.get_daily_scaling_factors(date=date).to_dict()
 
-        em_sum_dict = dict() # initialize result dict
+        emission_sum_dict = dict() # initialize result dict
         
-        # loop over visum model
+        # loop over all rows in the visum model
         for row in visum_dict:
             
             # relevant information from the visum model
@@ -59,7 +66,8 @@ def process_daily_emissions(date: str,
             bus_share = vehicle_shares['BUS'][scaling_road_type]
             
             # calculate vehicle share correction factor
-            k = (1- (hgv_corr * hgv_share)- (lcv_corr * lcv_share)) / (1 - hgv_share - lcv_share)
+            k = (1- (hgv_corr * hgv_share)- (lcv_corr * lcv_share)) / \
+                (1 - hgv_share - lcv_share)
             
             # calculate vehicle counts and apply vehicle share correction factor
             dtv = dict()
@@ -73,35 +81,36 @@ def process_daily_emissions(date: str,
             # calculate emissions on the respective road link depending on selected mode
             if mode == 'aggregated':
                 em = hbefa_obj.calculate_emissions_daily(dtv_vehicle = dtv,
-                                                         mode = 'aggregated',
-                                                         diurnal_cycle_vehicle = diurnal_cycles,
-                                                         road_type = row['road_type'], 
-                                                         hbefa_gradient = row['hbefa_gradient'],
-                                                         hbefa_speed = row['hbefa_speed'],
-                                                         hour_capacity = row['hour_capacity'],
-                                                         year = year)
+                                                mode = 'aggregated',
+                                                diurnal_cycle_vehicle = diurnal_cycles,
+                                                road_type = row['road_type'], 
+                                                hbefa_gradient = row['hbefa_gradient'],
+                                                hbefa_speed = row['hbefa_speed'],
+                                                hour_capacity = row['hour_capacity'],
+                                                year = year)
             if mode == 'los_specific':
                 em = hbefa_obj.calculate_emissions_daily(dtv_vehicle = dtv,
-                                                         mode = 'los_specific',
-                                                         diurnal_cycle_vehicle = diurnal_cycles,
-                                                         road_type = row['road_type'],
-                                                         hbefa_gradient = row['hbefa_gradient'],
-                                                         hbefa_speed = row['hbefa_speed'],
-                                                         hour_capacity = row['hour_capacity'],
-                                                         year = year)
+                                                mode = 'los_specific',
+                                                diurnal_cycle_vehicle = diurnal_cycles,
+                                                road_type = row['road_type'],
+                                                hbefa_gradient = row['hbefa_gradient'],
+                                                hbefa_speed = row['hbefa_speed'],
+                                                hour_capacity = row['hour_capacity'],
+                                                year = year)
             
-            em_sum_dict.update({row['index']:em}) # add emmissions to emission dict
+            emission_sum_dict.update({row['index']:em}) # add emmissions to emission dict
 
             
         print('Finished calculating '+ date)
-        # add emissions to queued result 
+        
+        # add emission results to queue
         if result_queue.empty():
-            result_queue.put(em_sum_dict)
-        else:
+            result_queue.put(emission_sum_dict)
+        else: # append to existing results if queue is not empty
             old_result = result_queue.get(timeout=60)
             for road_index, emissions in old_result.items():
                 for component, value in emissions.items():
-                    add_emissions = em_sum_dict[road_index][component]
+                    add_emissions = emission_sum_dict[road_index][component]
                     old_result[road_index][component] += add_emissions
             result_queue.put(old_result)
         return True
@@ -111,12 +120,23 @@ def process_daily_emissions(date: str,
         print('Cannot process '+ date )
         return False
 
-#TODO: clean up and comment function, maybe write class for this
+
 def process_hourly_emissions(date: str,
                             visum_dict: dict,
                             cycles_obj: TrafficCounts,
-                            hbefa_obj: HbefaHotEmissions,
-                            ):
+                            hbefa_obj: HbefaHotEmissions) -> dict:
+    """Calculates hourly emissions for a given date.
+    Should only be used for testing or small visum extents, otherwise it is too slow.
+
+    Args:
+        date (str): Date to be calculated
+        visum_dict (dict): Visum model as dict for faster looping
+        cycles_obj (TrafficCounts): Traffic counting object
+        hbefa_obj (HbefaHotEmissions): Hbefa hot emissions object
+
+    Returns:
+        Dict: Hot emissions for given date at hourly resolution
+    """
     try: 
         year = int(date[:4]) #convert year to integer
 
@@ -125,7 +145,7 @@ def process_hourly_emissions(date: str,
         vehicle_shares = cycles_obj.get_vehicle_share(date=date).to_dict()
         daily_scaling = cycles_obj.get_daily_scaling_factors(date=date).to_dict()
 
-        em_sum_dict = dict() # initialize result dict
+        emission_sum_dict = dict() # initialize result dict
         
         # loop over visum model
         for row in visum_dict:
@@ -144,7 +164,8 @@ def process_hourly_emissions(date: str,
             bus_share = vehicle_shares['BUS'][scaling_road_type]
             
             # calculate vehicle share correction factor
-            k = (1- (hgv_corr * hgv_share)- (lcv_corr * lcv_share)) / (1 - hgv_share - lcv_share)
+            k = (1- (hgv_corr * hgv_share)- (lcv_corr * lcv_share)) / \
+                (1 - hgv_share - lcv_share)
             
             # calculate vehicle counts and apply vehicle share correction factor
             dtv = dict()
@@ -157,15 +178,15 @@ def process_hourly_emissions(date: str,
             
             # calculate emissions on the respective road link
             em = hbefa_obj.calculate_emissions_hourly(dtv_vehicle = dtv,
-                                                     diurnal_cycle_vehicle = diurnal_cycles,
-                                                     road_type = row['road_type'], 
-                                                     hbefa_gradient = row['hbefa_gradient'], 
-                                                     hbefa_speed = row['hbefa_speed'],
-                                                     hour_capacity = row['hour_capacity'], 
-                                                     year = year)
+                                                diurnal_cycle_vehicle = diurnal_cycles,
+                                                road_type = row['road_type'], 
+                                                hbefa_gradient = row['hbefa_gradient'], 
+                                                hbefa_speed = row['hbefa_speed'],
+                                                hour_capacity = row['hour_capacity'], 
+                                                year = year)
             
-            em_sum_dict.update({row['index']:em}) # add emmissions to emission dict
-        return em_sum_dict
-    except:
+            emission_sum_dict.update({row['index']:em}) # add emmissions to dict
+        return emission_sum_dict
+    except Exception:
         return np.nan
     

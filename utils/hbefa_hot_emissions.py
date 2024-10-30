@@ -3,35 +3,35 @@ and use them to calculate hourly traffic emissions of different vehicle classes 
 components.
 """
     
-__version__ = 0.2
+__version__ = 0.3
 __author__ = "Daniel Kühbacher"
-
-import os
 
 import pandas as pd
 import numpy as np
-import xlrd
 
 from typing import Literal
 
 from traffic_counts import TrafficCounts
-import data_paths
+import data_paths  # noqa: F401
 
 class HbefaHotEmissions:
     """Defines HBEFA parameters and classes, imports emission factors and 
     calculates hourly traffic emissions of different vehicle classes and components
     """
     
-    vehicle_classes = ['PC', 'LCV', 'HGV', 'BUS', 'MOT']
+    _vehicle_classes = ['PC', 'LCV', 'HGV', 'BUS', 'MOT']
     
-    hbefa_raw_vehicle_classes = {'PC': 'pass. car',
-                                 'LCV': 'LCV',
-                                 'HGV' : 'HGV',
-                                 'MOT': 'motorcycle',
-                                 'BUS': 'coach'}
+    _hbefa_raw_vehicle_classes = {'pass. car' : 'PC',
+                                  'LCV': 'LCV',
+                                  'HGV' : 'HGV',
+                                  'motorcycle': 'MOT',
+                                  'coach': 'BUS'}
     
-    components = ['CO', 'NOx', 'PM', 'CO2(rep)', 'CO2(total)',
-                  'NO2', 'CH4', 'BC (exhaust)', 'CO2e']
+    # all available components in HBEFA
+    _all_components = ['NH3', 'HC', 'CO', 'NOx', 'FC', 'FC_MJ', 'PM', 'PN', 'CO2(rep)',
+                       'CO2(total)', 'NO2', 'CH4', 'NMHC', 'Pb', 'SO2', 'N2O',
+                       'PM (non-exhaust)', 'Benzene', 'PM2.5', 'BC (exhaust)',
+                       'PM2.5 (non-exhaust)', 'BC (non-exhaust)', 'CO2e']
     
     # thresholds acquired from different sources and expert assessments
     # the values are optimized for Munichs urban traffic basend 
@@ -45,27 +45,19 @@ class HbefaHotEmissions:
                           'Access-residential': [0.14, 0.25, 0.39, 0.52]}
     
     # level-of-service classes in HBEFA
-    service_class = {0: 'Freeflow',
+    _service_class = {0: 'Freeflow',
                      1: 'Heavy',
                      2: 'Satur.',
                      3: 'St+Go',
                      4: 'St+Go2'}
     
-    #assigns LOS classes to hbefa service classes
-    los_hbefa_mapping = {'A': 'Freeflow', 
-                         'B': 'Freeflow', 
-                         'C': 'Heavy', 
-                         'D': 'Heavy', 
-                         'E': 'Satur.', 
-                         'F': 'St+Go'}
-
-    hbefa_road_abbreviations = {'Motorway-Nat': 'MW-Nat.',
-                                'Motorway-City': 'MW-City',
-                                'TrunkRoad/Primary-National': 'Trunk-Nat.',
-                                'TrunkRoad/Primary-City': 'Trunk-City',
-                                'Distributor/Secondary': 'Distr',
-                                'Local/Collector': 'Local',
-                                'Access-residential': 'Access'}
+    _hbefa_raw_road_types = {'Motorway-Nat': 'MW-Nat.',
+                             'Motorway-City': 'MW-City',
+                             'TrunkRoad/Primary-National': 'Trunk-Nat.',
+                             'TrunkRoad/Primary-City': 'Trunk-City',
+                             'Distributor/Secondary': 'Distr',
+                             'Local/Collector': 'Local',
+                             'Access-residential': 'Access'}
     
     praeamble = {'Urban': 'URB',
                  'Motorway': 'MW', 
@@ -80,29 +72,53 @@ class HbefaHotEmissions:
                         'MOT': 1}
 
 
-    def __init__(self):
-        """Import emission factor tables and save as dict
+    def __init__(self, 
+                 components : list = ['CO2(rep)', 'NOx', 'CO'],
+                 vehicle_classes : list = ['PC', 'LCV', 'HGV'], 
+                 ef_type : Literal['EFA_weighted', 'EFA_WTT_weighted', 'EFA_WTW_weighted'] = 'EFA_weighted',
+                 area_type: Literal['Urban', 'Motorway', 'Rural'] = 'Urban'):
+        """Imports emission factors from HBEFA-exported txt files and initializes the class.
+
+        Args:
+            components (list, optional): Species to be considered in the calculation.
+            Defaults to ['CO2(rep)', 'NOx', 'CO'].
+            ef_type (Literal[EFA_weighted, EFA_WTT_weighted], optional): 
+            Type of emission factor to be considered.
+            Defaults to 'EFA_weighted'.
         """
-        self.ef_dict = {}
-        for vehicle in HbefaHotEmissions.vehicle_classes:
-             value = self._import_hbefa_ef(
-                 eval(f'data_paths.EF_{vehicle}'))
-             self.ef_dict.update({vehicle:value})
-             
-        self.ef_aggregated = self._import_hbefa_ef(
-            eval('data_paths.EF_aggregated_LOS'), 
-            columns_to_keep = ["Year", "Component", "VehCat",
-                               "RoadCat", "EFA_weighted"],
-            index_cols = ['Year', 'RoadCat', 'VehCat','Component'])
-
-
-    def _import_hbefa_ef(self,
-                         filepath:str,
-                         columns_to_keep:list = ['Year', 'Component', 'TrafficSit',
-                                                 'Gradient', 'EFA_weighted'],
-                         index_cols:list = ['Year', 'TrafficSit',
-                                            'Gradient','Component']) -> dict:
         
+        assert all([c in HbefaHotEmissions._all_components for c in components])
+        assert all([v in HbefaHotEmissions._vehicle_classes for v in vehicle_classes])
+        
+        self.components = components
+        self.vehicle_classes = vehicle_classes
+        self.ef_type = ef_type
+        self.area_type = area_type
+    
+        # load emission factors with explicit traffic situations
+        self.ef_dict = self._import_hbefa_ef(data_paths.EF_TS, 
+                                            columns_to_keep = ['VehCat', 'Year',
+                                                               'Component', 'TrafficSit',
+                                                               'Gradient', 'EFA_weighted',
+                                                               'EFA_WTT_weighted', 
+                                                               'EFA_WTW_weighted'], 
+                                            index_cols = ['VehCat', 'Year', 'TrafficSit',
+                                                          'Gradient','Component'])
+        # load emission factors with aggregated traffic situations
+        self.ef_aggregated = self._import_hbefa_ef(data_paths.EF_AGG,
+                                                columns_to_keep= ['Year', 'Component',
+                                                                  'VehCat', 'RoadCat',
+                                                                  'EFA_weighted',
+                                                                  'EFA_WTT_weighted', 
+                                                                  'EFA_WTW_weighted'],
+                                                index_cols = ['Year', 'RoadCat',
+                                                              'VehCat','Component'])
+        
+    def _import_hbefa_ef(self,
+                    filepath : str,
+                    columns_to_keep : list,
+                    index_cols : list) -> dict:
+    
         """Import emission factors from HBEFA-exported *.XLS table
         
         Args:
@@ -112,12 +128,15 @@ class HbefaHotEmissions:
             dict: emission factors
         """
         try:
-            workbook = xlrd.open_workbook(filepath, logfile = open(os.devnull,"w"))
-            df = pd.read_excel(workbook) # read_excel accepts workbooks too
-            df = df[columns_to_keep].set_index(index_cols) # reduce to useful columns
-            df_dict = df.to_dict() # convert to dict for faster access
+            ef = pd.read_csv(filepath, sep=';', encoding='latin_1',
+                             on_bad_lines= 'skip', decimal=',', 
+                             dtype={'AmbientCondPattern': str}) 
+            
+            ef['VehCat']= ef['VehCat'].map(HbefaHotEmissions._hbefa_raw_vehicle_classes)
+            ef= ef[columns_to_keep].set_index(index_cols) # reduce to useful columns
+            ef_dict= ef.to_dict() # convert to dict for faster access
             print(f'Loaded emission factors from {filepath}')
-            return df_dict
+            return ef_dict
         
         except Exception as e: 
             print(f'Could not load table from {filepath}\n')
@@ -141,7 +160,7 @@ class HbefaHotEmissions:
         Returns:
             str: HBEFA definition of the traffic situation
         """      
-        praeamble  = "URB"
+        praeamble  = HbefaHotEmissions.praeamble[self.area_type]
         vc_ratio = (htv_car_unit / hour_capacity) #hourly volume capacity ratio [%]
 
         iterator = 0 # used to access the right service class
@@ -151,7 +170,7 @@ class HbefaHotEmissions:
                 break
             iterator += 1
         
-        los = f'{praeamble}/{HbefaHotEmissions.hbefa_road_abbreviations[road_type]}/{str(hbefa_speed)}/{HbefaHotEmissions.service_class[iterator]}'
+        los = f'{praeamble}/{HbefaHotEmissions._hbefa_raw_road_types[road_type]}/{str(hbefa_speed)}/{HbefaHotEmissions._service_class[iterator]}'
         return los
     
     
@@ -195,8 +214,8 @@ class HbefaHotEmissions:
             for v in diurnal_cycle_vehicle.index])
         
         # initialize emissions dictionary
-        vehicle_component_tuples = [(v,c) for v in HbefaHotEmissions.vehicle_classes
-                                    for c in HbefaHotEmissions.components] 
+        vehicle_component_tuples = [(v,c) for v in self.vehicle_classes
+                                    for c in self.components] 
         emissions_dict = {_vc:0 for _vc in vehicle_component_tuples}
         
         
@@ -216,23 +235,20 @@ class HbefaHotEmissions:
                 los_hour = los_class[i]
             
                 # caclulate emissions for components and vehicle classes
-                for v in HbefaHotEmissions.vehicle_classes:
-                    for c in HbefaHotEmissions.components:
+                for v in self.vehicle_classes:
+                    for c in self.components:
                         try:
-                            emission = self.ef_dict[v]['EFA_weighted']\
-                                    [year, los_hour, hbefa_gradient, c] * htv_hour[v]
+                            emission = self.ef_dict[self.ef_type]\
+                                    [v, year, los_hour, hbefa_gradient, c] * htv_hour[v]
                             emissions_dict[(v,c)] += emission
                         except Exception: # catch errors from missing gradinent values
                             try:
-                                emission = self.ef_dict[v]['EFA_weighted']\
-                                        [year, los_hour, '0%', c] * htv_hour[v]
+                                emission = self.ef_dict[self.ef_type]\
+                                        [v, year, los_hour, '0%', c] * htv_hour[v]
                                 emissions_dict[(v,c)] += emission
                             except Exception as e:
-                                print(road_type)
-                                print(hbefa_gradient)
-                                print(hbefa_speed)
+                                print(road_type, hbefa_gradient, hbefa_speed)
                                 print('Exception ' + (str(e)))
-                                print('Cannot calculate emissions.')
                                 return 0
                             
         elif mode == 'aggregated':
@@ -242,12 +258,11 @@ class HbefaHotEmissions:
                 htv_hour = dict(zip(diurnal_cycle_vehicle.index, htv[i]))
                 
                 # caclulate emissions for components and vehicle classes
-                for v in HbefaHotEmissions.vehicle_classes:
-                    for c in HbefaHotEmissions.components:
-                        hbefa_raw_vehicle_class = HbefaHotEmissions.hbefa_raw_vehicle_classes[v]
-                        emission = self.ef_aggregated['EFA_weighted'][year,
-                                                                    'Urban',
-                                                                    hbefa_raw_vehicle_class,
+                for v in self.vehicle_classes:
+                    for c in self.components:
+                        emission = self.ef_aggregated[self.ef_type][year,
+                                                                    self.area_type,
+                                                                    v,
                                                                     c]* htv_hour[v]
                         emissions_dict[(v,c)] += emission
         
@@ -299,8 +314,8 @@ class HbefaHotEmissions:
                                          hbefa_speed = hbefa_speed) 
                      for x in htv_car_units]
         
-        vehicle_component_hour_tuples = [(v,c,h) for v in HbefaHotEmissions.vehicle_classes
-                                         for c in HbefaHotEmissions.components
+        vehicle_component_hour_tuples = [(v,c,h) for v in self.vehicle_classes
+                                         for c in self.components
                                          for h in range(0,24)]
         
         emissions_dict = {comb:0 for comb in vehicle_component_hour_tuples}
@@ -312,27 +327,25 @@ class HbefaHotEmissions:
             los_hour = los_class[i]
         
             # caclulate emissions for components and vehicle classes
-            for v in HbefaHotEmissions.vehicle_classes:
-                for c in HbefaHotEmissions.components:
+            for v in self.vehicle_classes:
+                for c in self.components:
                     try:
-                        emission = self.ef_dict[v]['EFA_weighted']\
-                                [year, los_hour, hbefa_gradient, c] * htv_hour[v]
+                        emission = self.ef_dict[self.ef_type]\
+                                [v, year, los_hour, hbefa_gradient, c] * htv_hour[v]
                         emissions_dict[(v,c,i)] = emission
 
                     except Exception: # catch errors from missing gradinent values
                         try: 
-                            emission = self.ef_dict[v]['EFA_weighted']\
-                                    [year, los_hour, '0%', c] * htv_hour[v]
+                            emission = self.ef_dict[self.ef_type]\
+                                    [v, year, los_hour, '0%', c] * htv_hour[v]
                             emissions_dict[(v,c,i)] = emission
  
                         except Exception as e:
-                            print(road_type)
-                            print(hbefa_gradient)
-                            print(hbefa_speed)
+                            print(road_type, hbefa_gradient, hbefa_speed)
                             print('Exception ' + (str(e)))
-                            print('Cannot calculate emissions.')
                             return 0
         return emissions_dict
+
 
 
 if __name__ == '__main__':
@@ -349,7 +362,10 @@ if __name__ == '__main__':
     cycles = TrafficCounts(init_timeprofile=False)
     diurnal_cycles = cycles.get_hourly_scaling_factors(date='2019-03-23')
     
-    t = HbefaHotEmissions()
+    t = HbefaHotEmissions(components = ['CO2e'],
+                          vehicle_classes= ['PC'],
+                          )
+    
     emissions = t.calculate_emissions_daily(
         mode = 'los_specific',
         dtv_vehicle = dtv_vehicle_test,

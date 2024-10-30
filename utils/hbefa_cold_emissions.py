@@ -18,19 +18,26 @@ class HbefaColdEmissions:
     """Class to calculate cold start emissions based on HBEFA emission factors.
     """
     
-    vehicle_classes = ['PC', 'LCV'] #no further classes available in HBEFA
+    _vehicle_classes = ['PC', 'LCV'] #no further classes available in HBEFA
     
-    components = ['CO', 'NOx', 'PM', 'CO2(rep)', 'CO2(total)', 
-                  'NO2', 'CH4', 'BC (exhaust)', 'CO2e']
+    _all_components = ['NOx', 'FC', 'FC_MJ', 'PM', 'PN', 'CO2(rep)', 'CO2(total)',
+                       'NO2', 'CH4', 'NMHC', 'Pb', 'SO2', 'Benzene', 'PM2.5',
+                       'BC (exhaust)', 'HC', 'CO', 'CO2e']
     
-    temperature_range = [-10, -5, 0, 5, 10, 15, 20, 25]
+    _temperature_range = [-10, -5, 0, 5, 10, 15, 20, 25]
     
     
-    def __init__(self):
+    def __init__(self, 
+                 components : list = ['CO2(rep)', 'NOx', 'CO']):
         """Load cold start emission factors from HBEFA excel file.
         """
+        assert all([c in HbefaColdEmissions._all_components for c in components])
+        
+        self.components = components
+        
+        # load emission factors from file
         self.emission_factors = self._import_hbefa_coldstart_ef(
-            data_paths.EF_ColdStart)
+            data_paths.EF_COLD)
 
 
     def _import_hbefa_coldstart_ef(self,
@@ -44,22 +51,23 @@ class HbefaColdEmissions:
             dict: emission factors
         """
         try:
-            workbook = xlrd.open_workbook(filepath, logfile=open(os.devnull, "w"))
-            df = pd.read_excel(workbook) # read_excel accepts workbooks too
+            
+            ef = pd.read_csv(filepath, sep=';', encoding='latin_1',
+                on_bad_lines= 'skip', decimal=',')
+
             columns_to_keep = ['VehCat', 'Year', 'Component',
-                               'AmbientCondPattern', 'EFA_weighted']
+                                'AmbientCondPattern', 'EFA_weighted']
 
             # convert Vehicle Categorie to common acronym
-            df.loc[df['VehCat']=='pass. car', 'VehCat'] = 'PC'
-            
-            df = df[columns_to_keep] # reduce to interesting columns
-            df = df.set_index(['VehCat', 'Year','Component', 'AmbientCondPattern'])
+            ef.loc[ef['VehCat']=='pass. car', 'VehCat'] = 'PC'
+            ef = ef[columns_to_keep] # reduce to interesting columns
+            ef = ef.set_index(['VehCat', 'Year','Component', 'AmbientCondPattern'])
             print(f'Loaded emission factors from {filepath}')
-            return df
+            return ef
     
-        except Exception as e: 
-            print(f'Could not load table from {filepath}\n')
+        except Exception as e:
             print(e)
+            print(f'Could not load table from {filepath}\n')
             return None
 
 
@@ -74,7 +82,7 @@ class HbefaColdEmissions:
             str: Strint representing the ambient condition pattern
         """
         # calculate closest temperature in HBEFA range
-        hbefa_temperature = min(HbefaColdEmissions.temperature_range,
+        hbefa_temperature = min(HbefaColdEmissions._temperature_range,
                                 key=lambda x: abs(x - temperature))
         
         # no further information for trip duration and length is available
@@ -90,9 +98,10 @@ class HbefaColdEmissions:
 
 
     def calculate_emission_hourly(self,
-                                 hourly_temperature: float,
-                                 vehicle_class: Literal['PC', 'LCV'],
-                                 year: int) -> float:
+                                  vehicle_starts : int,
+                                  hourly_temperature: float,
+                                  vehicle_class: Literal['PC', 'LCV'],
+                                  year: int) -> float:
         """calculates the daily cold start emission based on ambient condition pattern
 
         Args:
@@ -106,9 +115,10 @@ class HbefaColdEmissions:
         """
         
         amb = self._calc_ambient_condition_pattern(hourly_temperature)
-        em = self.emission_factors.loc[vehicle_class, year, :, amb]['EFA_weighted']
-            
-        return em
+        em = self.emission_factors.loc[vehicle_class, year, self.components, amb]['EFA_weighted']
+        e = em.droplevel(['VehCat', 'Year', 'AmbientCondPattern'])
+        
+        return e * vehicle_starts
 
 
 if __name__ == '__main__':
@@ -116,10 +126,11 @@ if __name__ == '__main__':
     """
     c = HbefaColdEmissions()
     
-    temperature = 23.01
+    temperature = 16.01
     
-    k = c.calculate_emission_hourly(hourly_temperature = temperature,
-                                 vehicle_class = 'PC',
-                                 year=2019)
+    k = c.calculate_emission_hourly(vehicle_starts = 10,
+                                    hourly_temperature = temperature,
+                                    vehicle_class = 'PC',
+                                    year = 2019)
     
     print(k)

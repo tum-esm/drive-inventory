@@ -22,13 +22,9 @@ BAST_COUNTING_PATH = abs_path + "/data/restricted_input/counting_data/bast/"
 
 #emission factors
 EF_path = abs_path + "/data/restricted_input/hbefa/"
-EF_BUS = abs_path + "/data/restricted_input/hbefa/EFA_HOT_Vehcat_Coach.XLS"
-EF_PC = abs_path + "/data/restricted_input/hbefa/EFA_HOT_Vehcat_PC.XLS"
-EF_LCV = abs_path + "/data/restricted_input/hbefa/EFA_HOT_Vehcat_LCV.XLS"
-EF_HGV = abs_path + "/data/restricted_input/hbefa/EFA_HOT_Vehcat_HGV.XLS"
-EF_MOT = abs_path + "/data/restricted_input/hbefa/EFA_HOT_Vehcat_MOT.XLS"
-EF_ColdStart = abs_path + "/data/restricted_input/hbefa/EFA_ColdStart_Vehcat_ColdStart.XLS"
-EF_aggregated_LOS = abs_path + "/data/restricted_input/hbefa/ef_aggregated_los/EFA_HOT_Vehcat_aggregated_LOS.XLS"
+EF_TS = abs_path + "/data/restricted_input/hbefa/EFA_HOT_ts_hbefa.txt"
+EF_AGG = abs_path + "/data/restricted_input/hbefa/EFA_HOT_aggregated_hbefa.txt"
+EF_COLD = abs_path + "/data/restricted_input/hbefa/EFA_ColdStart_hbefa.txt"
 
 # emission inventory
 INVENTORY_FOLDER_PATH = abs_path + "/data/inventory/"

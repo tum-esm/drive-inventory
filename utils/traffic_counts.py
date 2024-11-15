@@ -30,7 +30,7 @@ class TrafficCounts:
         self.cal = excel_calendar.Calendar()
         
         # read and import traffic counting data
-        _file_path = data_paths.COUNTING_PATH + 'counting_data_combined.parquet'
+        _file_path = data_paths.COUNTING_PATH + 'counting_data_combined_until2023.parquet'
         _counting_df = pd.read_parquet(_file_path)
         
         # get information from the counting data

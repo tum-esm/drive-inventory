@@ -8,3 +8,6 @@ Method to calculate a spatially and temporally explicity bottom-up traffic emiss
 ``source .venv/bin/activate``
 2. Install required packages<br>
 ``pip install -r requirements.lock.txt``
+
+#TODO Update Readme
+#TODO Write Code Manual

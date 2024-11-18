@@ -3,7 +3,7 @@ by accessing the emission calculation moduls as well as the traffic count.
 The process can be run in parallel to speed up the calculation process.
 """
     
-__version__ = 0.1
+__version__ = 0.2
 __author__ = "Daniel Kühbacher"
 
 import numpy as np

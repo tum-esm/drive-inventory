@@ -5,11 +5,7 @@ temperature and hourly activity profiles.
 __version__ = 0.2
 __author__ = "Daniel Kühbacher"
 
-import os
-
 import pandas as pd
-import xlrd
-
 from typing import Literal
 
 import data_paths
@@ -30,6 +26,7 @@ class HbefaColdEmissions:
     def __init__(self, 
                  components : list = ['CO2(rep)', 'NOx', 'CO']):
         """Load cold start emission factors from HBEFA excel file.
+        Initilize for specific components.
         """
         assert all([c in HbefaColdEmissions._all_components for c in components])
         
@@ -102,7 +99,7 @@ class HbefaColdEmissions:
                                   hourly_temperature: float,
                                   vehicle_class: Literal['PC', 'LCV'],
                                   year: int) -> float:
-        """calculates the daily cold start emission based on ambient condition pattern
+        """Calculates the daily cold start emission based on ambient condition pattern
 
         Args:
             hourly_temperature (float): _description_

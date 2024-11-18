@@ -1,4 +1,4 @@
-"""This module holds tools to convert line sources to gridded area sources.
+"""Tools to convert line source emissions to rastered area emissions.
 """
 
 __version__ = 0.2
@@ -13,7 +13,8 @@ from typing import Literal
 
 
 class GriddingEngine:
-    """This class provides functions to make grids and perform gridding
+    """This class provides functions to make grids and perform gridding of line 
+    source emissions.
     """
     def __init__(self, 
                  crs:int,

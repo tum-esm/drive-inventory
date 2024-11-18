@@ -1,4 +1,4 @@
-"""This module is used to import the emission factors from HBEFA exported *.XLS tables
+"""This module is used to import the emission factors from HBEFA exported *.csv files
 and use them to calculate hourly traffic emissions of different vehicle classes and 
 components.
 """
@@ -12,7 +12,7 @@ import numpy as np
 from typing import Literal
 
 from traffic_counts import TrafficCounts
-import data_paths  # noqa: F401
+import data_paths  
 
 class HbefaHotEmissions:
     """Defines HBEFA parameters and classes, imports emission factors and 
@@ -75,9 +75,11 @@ class HbefaHotEmissions:
     def __init__(self, 
                  components : list = ['CO2(rep)', 'NOx', 'CO'],
                  vehicle_classes : list = ['PC', 'LCV', 'HGV'], 
-                 ef_type : Literal['EFA_weighted', 'EFA_WTT_weighted', 'EFA_WTW_weighted'] = 'EFA_weighted',
+                 ef_type : Literal['EFA_weighted', 'EFA_WTT_weighted',
+                                   'EFA_WTW_weighted'] = 'EFA_weighted',
                  area_type: Literal['Urban', 'Motorway', 'Rural'] = 'Urban'):
-        """Imports emission factors from HBEFA-exported txt files and initializes the class.
+        """Imports emission factors from HBEFA-exported *.txt files and initializes 
+        the class.
 
         Args:
             components (list, optional): Species to be considered in the calculation.
@@ -113,13 +115,14 @@ class HbefaHotEmissions:
                                                                   'EFA_WTW_weighted'],
                                                 index_cols = ['Year', 'RoadCat',
                                                               'VehCat','Component'])
-        
+  
+      
     def _import_hbefa_ef(self,
                     filepath : str,
                     columns_to_keep : list,
                     index_cols : list) -> dict:
     
-        """Import emission factors from HBEFA-exported *.XLS table
+        """Import emission factors from HBEFA-exported *.csv table
         
         Args:
             filepath (str): path to emission factor table
@@ -267,7 +270,7 @@ class HbefaHotEmissions:
                         emissions_dict[(v,c)] += emission
         
         return emissions_dict
-    
+
 
 
     def calculate_emissions_hourly(self,

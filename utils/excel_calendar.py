@@ -1,15 +1,14 @@
-"""Module to import a predefined calendar for different years.
+"""Module to import and access a predefined calendar file for different years.
 The path to the calender excel file should be defined in data_paths.py (utils)
 """
 
-__version__ = 2.1
+__version__ = 2.2
 __author__ = 'Daniel Kühbacher'
 
 import pandas as pd
 
 import data_paths
 from dateutil.parser import parse
-
 
 
 class Calendar:
@@ -19,8 +18,8 @@ class Calendar:
         """Initializes the calender object and loads from calender file
 
         Args:
-            years (list, optional): _description_. Defaults to [2018, 2019, 2020,
-            2021, 2022, 2023].
+            years (list, optional): years to parse from calendar xlsx file.
+            Defaults to [2018, 2019, 2020, 2021, 2022, 2023].
         """
         self.cal = self._fetch_calendar(years[0])
         for year in years[1:]:
@@ -33,8 +32,8 @@ class Calendar:
 
 
     def _fetch_calendar(self, year:int) -> pd.DataFrame:
-        """Loads calendar *.xlsx shee from path defined in 
-        data_paths.json and returns it as dataframe.
+        """Loads calendar *.xlsx sheet from path defined in 
+        data_paths.py and returns it as dataframe.
 
         Args:
             year (int): Year of the requested calendar
@@ -53,14 +52,15 @@ class Calendar:
             print(e)
 
 
-    def get_weekday(self, date_string) -> int:
-        """_summary_
+    def get_weekday(self, date_string: str) -> int:
+        """Returns weekday as integer (0=Monday, 1=Tuesday, ..., 6=Sunday) form 
+        calendar file
 
         Args:
-            date_string (_type_): _description_
+            date_string (str): datetime object or string to be parsed
 
         Returns:
-            int: _description_
+            int: weekday as integer
         """
         if isinstance(date_string, str):
             try:
@@ -75,14 +75,15 @@ class Calendar:
         return cal_indexed.loc[dt]['day_of_week']
 
 
-    def get_day_type(self, date_string) -> int:
-        """_summary_
+    def get_day_type(self, date_string:str) -> int:
+        """returns day type (weekday, weekday during vacation, Saturday,
+        Sunday, holiday) from calendar file
 
         Args:
-            date_string (_type_): _description_
+            date_string (str): datetime object or string to be parsed
 
         Returns:
-            int: _description_
+            int: day type as integer
         """
         if isinstance(date_string, str):
             try:
@@ -98,9 +99,9 @@ class Calendar:
 
 
     def get_day_type_combined(self, date_string) -> int:
-        """Returns different day types that are based on the weekday and specific 
-        day_types. 
-        0 -> Normweekday (Tuesday to Thursday)
+        """Returns day types that are based on the weekday and specific 
+        day types. These day types are not unique! Normweekday is a subset of weekday.
+        0 -> Normweekday (Tuesday to Thursday; relevant in traffic engineering)
         1 -> Weekday
         2 -> Weekday during vacation
         3 -> Saturday
@@ -148,6 +149,7 @@ if __name__ == "__main__":
     """Testing
     """
     cal = Calendar()
-    print(f'Loaded calender from {cal.get_calendar()["date"].min()} \
-        unitl {cal.get_calendar()["date"].max()}')
+    date_min = cal.get_calendar()["date"].min()
+    date_max = cal.get_calendar()["date"].max()
+    print(f'Loaded calender from {date_min} until {date_max}')
     print(cal.get_day_type('2022 June 15'))

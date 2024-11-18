@@ -23,14 +23,15 @@ class TrafficCounts:
     ref_year = '2019' # reference year for normalization
     ref_day_type = 0 # normal weekday (see definition in excel calendar
 
-    def __init__(self, init_timeprofile = True):
+    def __init__(self,
+                 init_timeprofile = True):
         """Loads traffic couning data and preprocesses daily, annual and hourly cycles.
         """
         # initialize calendar object
         self.cal = excel_calendar.Calendar()
         
         # read and import traffic counting data
-        _file_path = data_paths.COUNTING_PATH + 'counting_data_combined_until2023.parquet'
+        _file_path = data_paths.COMBINED_COUNTING_DATA
         _counting_df = pd.read_parquet(_file_path)
         
         # get information from the counting data

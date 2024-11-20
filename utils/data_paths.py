@@ -21,7 +21,7 @@ VISUM_FOLDER_PATH = abs_path + "/data/restricted_input/visum/"
 COUNTING_PATH = abs_path + "/data/restricted_input/counting_data/"
 MST_COUNTING_PATH = abs_path + "/data/restricted_input/counting_data/lhm/"
 BAST_COUNTING_PATH = abs_path + "/data/restricted_input/counting_data/bast/"
-COMBINED_COUNTING_DATA = COUNTING_PATH * "counting_data_combined.parquet"
+COMBINED_COUNTING_DATA = COUNTING_PATH + "counting_data_combined.parquet"
 
 
 # HBEFA emission factors

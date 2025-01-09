@@ -222,18 +222,16 @@ class HbefaHotEmissions:
             print('Keys in dtv_vehicle don`t agree with indexes in diurnal cycle.')
             print('Check key ' + str(e))
             return 0
-
-        # calculate total hourly traffic count as passenger car equivalents
-        htv_car_units = np.array([HbefaHotEmissions.car_unit_factors[v]\
-            for v in diurnal_cycle_vehicle.index])
-        
+                
         # initialize emissions dictionary
         vehicle_component_tuples = [(v,c) for v in self.vehicle_classes
                                     for c in self.components] 
         emissions_dict = {_vc:0 for _vc in vehicle_component_tuples}
         
-        
         if mode == 'los_specific':
+             # calculate total hourly traffic count as passenger car equivalents
+            htv_car_units = np.array([HbefaHotEmissions.car_unit_factors[v]\
+                for v in diurnal_cycle_vehicle.index])
             htv_car_units = (htv * htv_car_units).sum(axis=1)
             # list of 24 service classes for each hour of the day
             los_class = [self.calc_los_class(htv_car_unit = x,
@@ -324,20 +322,20 @@ class HbefaHotEmissions:
 
         # calculate total hourly traffic count as passenger car equivalents
         htv_car_units = np.array([HbefaHotEmissions.car_unit_factors[v]\
-            for v in diurnal_cycle_vehicle.index])
+            for v in diurnal_cycle_vehicle.index]) # get car unit factor for each vehicle
         htv_car_units = (htv * htv_car_units).sum(axis=1)
         
-        # list of 24 service classes for each hour of the day
+        # list of 24 traffic conditions for each hour of the day
         los_class = [self.calc_los_class(htv_car_unit = x,
                                          hour_capacity = hour_capacity,
                                          road_type = road_type,
                                          hbefa_speed = hbefa_speed) 
                      for x in htv_car_units]
         
+        # initialize emissions dictionary for results
         vehicle_component_hour_tuples = [(v,c,h) for v in self.vehicle_classes
                                          for c in self.components
                                          for h in range(0,24)]
-        
         emissions_dict = {comb:0 for comb in vehicle_component_hour_tuples}
         
         # calculate emissions for each hour of the day
@@ -350,14 +348,20 @@ class HbefaHotEmissions:
             for v in self.vehicle_classes:
                 for c in self.components:
                     try:
-                        emission = self.ef_dict[self.ef_type]\
-                                [v, year, los_hour, hbefa_gradient, c] * htv_hour[v]
+                        emission = self.ef_dict[self.ef_type][year, 
+                                                              los_hour, 
+                                                              v, 
+                                                              hbefa_gradient,
+                                                              c] * htv_hour[v]
                         emissions_dict[(v,c,i)] = emission
 
                     except Exception: # catch errors from missing gradinent values
                         try: 
-                            emission = self.ef_dict[self.ef_type]\
-                                    [v, year, los_hour, '0%', c] * htv_hour[v]
+                            emission = self.ef_dict[self.ef_type][year,
+                                                                  los_hour, 
+                                                                  v, 
+                                                                  '0%',
+                                                                  c] * htv_hour[v]
                             emissions_dict[(v,c,i)] = emission
  
                         except Exception as e:
@@ -382,13 +386,13 @@ if __name__ == '__main__':
     cycles = TrafficCounts(init_timeprofile=False)
     diurnal_cycles = cycles.get_hourly_scaling_factors(date='2019-03-23')
     
-    t = HbefaHotEmissions(components = ['CO2e'],
+    t = HbefaHotEmissions(components = ['NH3'],
                           vehicle_classes= ['PC'],
-                          ef_type='EFA_WTW_weighted'
+                          ef_type='EFA_weighted'
                           )
     
-    emissions = t.calculate_emissions_daily(
-        mode = 'los_specific',
+    emissions = t.calculate_emissions_hourly(
+        #mode = 'los_specific',
         dtv_vehicle = dtv_vehicle_test,
         hour_capacity = 1000,
         diurnal_cycle_vehicle = diurnal_cycles,
@@ -397,4 +401,4 @@ if __name__ == '__main__':
         hbefa_gradient = '0%',
         year = 2019)
     
-    print(emissions)
+    print(emissions) 

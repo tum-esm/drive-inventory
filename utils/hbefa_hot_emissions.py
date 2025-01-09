@@ -36,13 +36,13 @@ class HbefaHotEmissions:
     # thresholds acquired from different sources and expert assessments
     # the values are optimized for Munichs urban traffic basend 
     # on national LOS distribution
-    service_thresholds = {'Motorway-Nat': [0.5, 0.71, 0.98, 1.1],
-                          'Motorway-City': [0.55, 0.75, 0.9, 1], # not used
-                          'TrunkRoad/Primary-National': [0.33, 0.5, 0.7, 0.8],
-                          'TrunkRoad/Primary-City': [0.67, 0.82, 0.92, 1.02],
-                          'Distributor/Secondary': [0.37, 0.5, 0.63, 0.8],
-                          'Local/Collector': [0.55, 0.75, 0.9, 1], # not used
-                          'Access-residential': [0.14, 0.25, 0.39, 0.52]}
+    default_vcr_thresholds = {'Motorway-Nat': [0.5, 0.71, 0.98, 1.1],
+                              'Motorway-City': [0.55, 0.75, 0.9, 1], # not used
+                              'TrunkRoad/Primary-National': [0.33, 0.5, 0.7, 0.8],
+                              'TrunkRoad/Primary-City': [0.67, 0.82, 0.92, 1.02],
+                              'Distributor/Secondary': [0.37, 0.5, 0.63, 0.8],
+                              'Local/Collector': [0.55, 0.75, 0.9, 1], # not used
+                              'Access-residential': [0.14, 0.25, 0.39, 0.52]}
     
     # level-of-service classes in HBEFA
     _service_class = {0: 'Freeflow',
@@ -96,15 +96,16 @@ class HbefaHotEmissions:
         self.vehicle_classes = vehicle_classes
         self.ef_type = ef_type
         self.area_type = area_type
+        self._vcr_thresholds = HbefaHotEmissions.default_vcr_thresholds
     
         # load emission factors with explicit traffic situations
         self.ef_dict = self._import_hbefa_ef(data_paths.EF_TS, 
-                                            columns_to_keep = ['VehCat', 'Year',
-                                                               'Component', 'TrafficSit',
+                                            columns_to_keep = ['Year', 'Component', 
+                                                               'VehCat', 'TrafficSit',
                                                                'Gradient', 'EFA_weighted',
                                                                'EFA_WTT_weighted', 
                                                                'EFA_WTW_weighted'], 
-                                            index_cols = ['VehCat', 'Year', 'TrafficSit',
+                                            index_cols = ['Year', 'TrafficSit','VehCat',
                                                           'Gradient','Component'])
         # load emission factors with aggregated traffic situations
         self.ef_aggregated = self._import_hbefa_ef(data_paths.EF_AGG,
@@ -115,6 +116,16 @@ class HbefaHotEmissions:
                                                                   'EFA_WTW_weighted'],
                                                 index_cols = ['Year', 'RoadCat',
                                                               'VehCat','Component'])
+    
+    
+    @property
+    def vcr_thresholds(self): 
+        return self._vcr_thresholds
+    
+    
+    @vcr_thresholds.setter
+    def vcr_thresholds(self, value):
+        self._vcr_thresholds = value
   
       
     def _import_hbefa_ef(self,
@@ -168,7 +179,7 @@ class HbefaHotEmissions:
 
         iterator = 0 # used to access the right service class
         # calculate category based on treshold provided in "service_thresholds"
-        for tres in HbefaHotEmissions.service_thresholds[road_type]:
+        for tres in self._vcr_thresholds[road_type]:
             if vc_ratio <= tres:
                 break
             iterator += 1
@@ -241,13 +252,19 @@ class HbefaHotEmissions:
                 for v in self.vehicle_classes:
                     for c in self.components:
                         try:
-                            emission = self.ef_dict[self.ef_type]\
-                                    [v, year, los_hour, hbefa_gradient, c] * htv_hour[v]
+                            emission = self.ef_dict[self.ef_type][year,
+                                                                  los_hour,
+                                                                  v,
+                                                                  hbefa_gradient,
+                                                                  c] * htv_hour[v]
                             emissions_dict[(v,c)] += emission
-                        except Exception: # catch errors from missing gradinent values
+                        except Exception: # catch errors from missing gradient values
                             try:
-                                emission = self.ef_dict[self.ef_type]\
-                                        [v, year, los_hour, '0%', c] * htv_hour[v]
+                                emission = self.ef_dict[self.ef_type][year,
+                                                                      los_hour,
+                                                                      v,
+                                                                      '0%',
+                                                                      c] * htv_hour[v]
                                 emissions_dict[(v,c)] += emission
                             except Exception as e:
                                 print(road_type, hbefa_gradient, hbefa_speed)
@@ -367,6 +384,7 @@ if __name__ == '__main__':
     
     t = HbefaHotEmissions(components = ['CO2e'],
                           vehicle_classes= ['PC'],
+                          ef_type='EFA_WTW_weighted'
                           )
     
     emissions = t.calculate_emissions_daily(

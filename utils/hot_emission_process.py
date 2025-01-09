@@ -117,7 +117,8 @@ def process_daily_emissions(date: str,
     
     except Exception as e:
         error_queue.put({date:e})
-        print('Cannot process '+ date )
+        print('\nCannot process '+ date )
+        print(e)
         return False
 
 

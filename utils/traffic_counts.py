@@ -19,14 +19,21 @@ class TrafficCounts:
     """ Reads combined counting data calculates, and provides an interface 
     to the traffic cycles.
     """
-    
-    ref_year = '2019' # reference year for normalization
-    ref_day_type = 0 # normal weekday (see definition in excel calendar
 
     def __init__(self,
-                 init_timeprofile = True):
+                 init_timeprofile = True, 
+                 reference_year = '2019', # reference year for normalization
+                 reference_day_type = 0): # normal weekday
         """Loads traffic couning data and preprocesses daily, annual and hourly cycles.
+        Args: 
+        init_timeprofile (bool): if True, time profile is initialized
+        reference_year (str): reference year for normalization
+        reference_day_type (int): normal weekday (see definition in excel calendar)
         """
+        # initialize reference year and day type
+        self.ref_year = reference_year
+        self.ref_day_type = reference_day_type
+        
         # initialize calendar object
         self.cal = excel_calendar.Calendar()
         
@@ -163,9 +170,9 @@ class TrafficCounts:
         """
         # mean normweekday count (day_type =0) of complete counting timeseries
         # inter-quantile-range mean to reduce outlier influence
-        df_mean = df[(df['date'].between(f'{TrafficCounts.ref_year}-01-01',
-                                         f'{TrafficCounts.ref_year}-12-31')) &
-                        (df['day_type']== TrafficCounts.ref_day_type) & 
+        df_mean = df[(df['date'].between(f'{self.ref_year}-01-01',
+                                         f'{self.ref_year}-12-31')) &
+                        (df['day_type']== self.ref_day_type) & 
                         (df['complete'])] \
                             .groupby(['road_link_id', 'vehicle_class'])['daily_value']\
                                 .apply(self._iqr_mean).reset_index()

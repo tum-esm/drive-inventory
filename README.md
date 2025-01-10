@@ -1,13 +1,21 @@
-# Traffic Emission Inventory
-Method to calculate a spatially and temporally explicity bottom-up traffic emission inventory based on a macroscopic traffic model, traffic counting data and HBEFA emission factors.
+# DDRIVE v1.0
+**Data-Driven Road-Traffic Inventory for Vehicle Emissions**<br>
 
-### How to set up
+A python-based framework to calculate road traffic emissions in urban areas. The method is based on a macroscopic traffic model (static traffic demand model) and data from multiple traffic counting stations (dynamic traffic data) to estimate hourly traffic volume and traffic condition on a road-link level. This granular activity data is combined with [HBEFA 4.2](https://www.hbefa.net/) emission factors to estimate hot vehicle exhaust emissions and cold start excess emissions. 
 
+The project is part of [**ICOS Cities**](https://www.icos-cp.eu/projects/icos-cities), funded by the European Union's Horizon 2020 Research and Innovation Programme under grant agreement No. **101037319**.
+
+## Method Overview
+
+<img src="./docs/img/method_overview.svg">
+
+
+## Related Work
+Kühbacher, D., Aigner, P., Super, I., Droste, A., Denier van der Gon, H., Ilic, M., and Chen, J.: Bottom-up estimation of traffic emissions in Munich based on macroscopic traffic simulation and counting data, EGU General Assembly 2023, Vienna, Austria, 24–28 Apr 2023, EGU23-12997, https://doi.org/10.5194/egusphere-egu23-12997, 2023.
+
+## How to set up
 1. Install and activate python in a virtual environment<br>
 ``python3.11 -m venv .venv``<br>
 ``source .venv/bin/activate``
 2. Install required packages<br>
 ``pip install -r requirements.lock.txt``
-
-#TODO Update Readme
-#TODO Write Code Manual

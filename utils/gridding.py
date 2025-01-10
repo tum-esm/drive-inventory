@@ -4,6 +4,8 @@
 __version__ = 0.2
 __author__ = 'Daniel Kühbacher'
 
+import os
+
 import geopandas as gpd
 import numpy as np
 
@@ -11,6 +13,7 @@ from shapely.geometry import Polygon
 
 from typing import Literal
 
+os.environ['USE_PYGEOS'] = '0'
 
 class GriddingEngine:
     """This class provides functions to make grids and perform gridding of line 

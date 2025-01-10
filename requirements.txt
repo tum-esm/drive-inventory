@@ -5,11 +5,9 @@ numpy
 shapely
 ipython
 jupyter
-seaborn
-pygeos 
+seaborn 
 rtree
 xlrd
 bokeh
-openpyxlpip
 lmu_meteo_api
 pyarrow

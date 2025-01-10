@@ -1,7 +1,7 @@
 # DDRIVE v1.0
 **Data-Driven Road-Traffic Inventory for Vehicle Emissions**<br>
 
-A python-based framework to calculate road traffic emissions in urban areas. The method is based on a macroscopic traffic model (static traffic demand model) and data from multiple traffic counting stations (dynamic traffic data) to estimate hourly traffic volume and traffic condition on a road-link level. This granular activity data is combined with [HBEFA 4.2](https://www.hbefa.net/) emission factors to estimate hot vehicle exhaust emissions and cold start excess emissions. 
+Python-based framework to calculate road traffic emissions in urban areas. The method is based on a macroscopic traffic model (static traffic demand model) and data from multiple traffic counting stations (dynamic traffic data) to estimate hourly traffic volume and traffic condition on a road-link level. This granular activity data is combined with [HBEFA 4.2](https://www.hbefa.net/) emission factors to estimate hot vehicle exhaust emissions and cold start excess emissions. 
 
 The project is part of [**ICOS Cities**](https://www.icos-cp.eu/projects/icos-cities), funded by the European Union's Horizon 2020 Research and Innovation Programme under grant agreement No. **101037319**.
 
@@ -24,3 +24,20 @@ Kühbacher, D., Aigner, P., Super, I., Droste, A., Denier van der Gon, H., Ilic,
 4. Run a jupyterlab on your computer and select the virtual environment ddrive as kernel.
 ``jupyterlab``
 
+## How to use
+Data availability is essential to use this framework and calculate the road traffic emissions. 
+
+
+
+Be aware that the followig data requirements must be fulfilled: 
+
+- Geo-data of the road network including information of the (1) traffic volume, (2) road type, (3), maximum allowed speed and (4) road gradient. This data can typically be exported from macroscopic traffic demand models (e.g. PTV VISUM) that are commonly used by public authorities for traffic planning. The number of vehicle starts can also be exported from these models and is required to calculate cold start excess emissions (CSEE).
+- Traffic counting data from multiple counting stations in your area of interest. 
+- HBEFA 4.2 licence
+-> provide a polygon defining your exact area of interst
+
+
+
+
+required licences: 
+HBEFA 4.2

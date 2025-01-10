@@ -15,12 +15,12 @@ Kühbacher, D., Aigner, P., Super, I., Droste, A., Denier van der Gon, H., Ilic,
 
 ## How to set up
 1. Install and activate python in a virtual environment<br>
-``python3.11 -m venv .venv``<br>
-``source .venv/bin/activate``
+``python3 -m venv .ddrive``<br>
+``source .ddrive/bin/activate``
 2. Install required packages<br>
-``pip install -r requirements.lock.txt``
+``pip install -r requirements.txt``
 3. Install jupyter kernel for the virtual environment.
-``ipython kernel install --user --name=venv``
-4. Run a jupyter on your computer and select the virtual environment.
-``jupyter notebook``
+``ipython kernel install --user --name=ddrive``
+4. Run a jupyterlab on your computer and select the virtual environment ddrive as kernel.
+``jupyterlab``
 

@@ -1,6 +1,6 @@
 # Data folder
 
-This folder contains the data required to calculate the inventory. Since not all data are publicly available (e.g. VISUM model and traffic counting data), there are some datasets missing. <br><br>
+This folder contains the data required to process the emission inventory. Since not all data are publicly available (e.g. VISUM model and traffic counting data), there are some datasets missing. <br><br>
 
 ## Auxiliary data
 Includes the calendar excel file used to distinguish between different day types.

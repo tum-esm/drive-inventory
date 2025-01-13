@@ -9,4 +9,4 @@ Set-up and run the notebooks in the following order:<br>
 (Optional)[13_calculate_detector_emissions](/notebooks/13_calculate_detector_emissons.ipynb)<br>
 (Optional)[21_emission_gridding.ipynb](/notebooks/21_emission_gridding.ipynb)<br>
 
-Detailed instructions are available in the respective notebook.
+Detailed instructions are available in the respective notebook. Change the input parameters according to your application in the section **notebook_settings** of the respective notebook.

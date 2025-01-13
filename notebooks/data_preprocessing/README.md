@@ -41,8 +41,10 @@ The traffic counting data can be sourced from different providers and must be co
 |**23:00**|
 
 ## 3. Pre-processing for the traffic model
-As soon as the traffic counting data is available, the traffic model must be pre-processed and converted into the required format. We use a macroscopic traffic model (PTV VISUM) that represents the average weekday traffic outside vacation time for Passenger Cars (PC), Light Cargo Vehicles (LCV) and Heavy Goods Vehicles (HGV). It also provides the number of vehicle starts in defined spatial areas which is used to calculate the cold start excess emissions (CSEE). First, we import the traffic model outputs and convert important attributes to HEBFA compatible formats. Additional to the actual road type, we define an attribute *scaling_road_type* that combines multiple road types for temporal scaling. Then the vehicle share correction factors are calculated and the zonal number of vehicle starts is attributed to the road links.
+Now the traffic model must be pre-processed and converted into the required format. We used a macroscopic traffic model (PTV VISUM) that represents the average weekday traffic outside vacation time for Passenger Cars (PC), Light Cargo Vehicles (LCV) and Heavy Goods Vehicles (HGV). It also provides the number of vehicle starts in defined spatial areas which is used to calculate the cold start excess emissions (CSEE). First, we import the traffic model outputs and convert important attributes to HEBFA compatible formats. Additional to the actual road type, we define an attribute *scaling_road_type* that combines multiple road types for temporal scaling. Then the vehicle share correction factors are calculated and the zonal number of vehicle starts is attributed to the road links.
 
+>**_ToDo:_**
+>- Follow the steps defined in [preprocess_visum_model.ipynb](/notebooks/data_preprocessing/preprocess_visum_model.ipynb) and convert the traffic model to the data format defined below. 
 
 ### Data format of the traffic model
 |Attribute |Description|
@@ -54,23 +56,39 @@ As soon as the traffic counting data is available, the traffic model must be pre
 |hbefa_speed| HBEFA compatible maximum allowed speed on the road link.| 
 |hbefa_gradient| HBEFA compatible gradient of the road.| 
 |dtv_SUM| Total traffic volume for the reference time-period on the road link.|
-|delta_PC| Share of passenger car traffic on the road link.
-|delta_LCV| Share of light cargo vehicle traffic on the road link.| 
-|delta_HGV| Share of heavy goods vehicle traffic on the road link.| 
-|hgv_corr| Correction factor for heavy goods vehicles.| 
-|lcv_corr| Correction factor for light cargo vehicles.| 
-|PC_cold_starts| Number of passenger car vehicle starts.|
-|PC_cold_starts| Number of passenger car vehicle starts.|
-
-
-
+|delta_PC (optional)| Share of passenger car traffic on the road link.
+|delta_LCV (optional)| Share of light cargo vehicle traffic on the road link.| 
+|delta_HGV (optional)| Share of heavy goods vehicle traffic on the road link.| 
+|hgv_corr| Correction factor for heavy goods vehicles. Should be set to 1 if *delta_HGV* is not available.| 
+|lcv_corr| Correction factor for light cargo vehicles. Should be set to 1 if *delta_LCV* is not available.| 
+|PC_cold_starts (optional)| Number of passenger car vehicle starts. If not available, cold start emissions cannot be calculated.|
+|PC_cold_starts (optional)| Number of passenger car vehicle starts. If not available, cold start emissions cannot be calculated.|
 
 ## 4. Combine pre-processed counting data
+Finally we combine the pre-processed counting data and add additional information from the calender and the traffic model to it. Data from multiple detectors is agregated, road type and day type information as well as two flags for data quality checks added. This is to produce the input datafile for the [traffic counts](/utils/traffic_counts.py) module which outputs daily and annual cycles and vehicle shares.
+
+>**_ToDo:_**
+>- Follow the steps defined in [combine_preprocessed_files.ipynb](/notebooks/data_preprocessing/combine_preprocesed_files.ipynb) and convert the traffic model to the data format defined below. 
+
+### Combined data format for the traffic counting data
+|Attribute |Description|
+|---------:|:----------|
+|**road_link_id** | Identifies the road link in the traffic model.|
+|**date** | Date of the measurement.|
+|**vehicle_class** |PKW, LNF, SNF, MOT, BUS, SUM|
+|**road_type** |Road type of the corresponding road link|
+|**day_type** |0: norm-weekday, 1: weekday, 2: Saturday,3: Sunday/Holiday|
+|**complete** |Share of days with available counting data in the total time span.|
+|**sqv**|Fit between counting data and traffic model.|
+|**daily_value**|Daily total count|
+|**00:00**|
+|...| Hourly counting values|
+|**23:00**|
 
 
+## Final steps
+Whe the pre-processing is finished, the [data_paths.py](/utils/data_paths.py) file should be updated accordingly. Then continue with the actual emission calculation.
 
-Final steps
-
-- update data paths
-- continue wiht the inventory calculation. -> Reference inventory readme
-
+>**_ToDo:_**
+>- Update the [data_paths.py](/utils/data_paths.py) file.
+>- Continue with the [instruction](/notebooks/README.md) on the emission calculation.

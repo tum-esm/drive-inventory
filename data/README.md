@@ -33,7 +33,9 @@ In the inventory folder, all outputs are stored. The subfolder [temporal_profile
 
 
 ## Final steps
-For easy access to all files and folders, a data paths module translates all file- and folderpaths to variable that can be easily accessed.
+For easy access to all files and folders, a data paths module translates all file- and folderpaths to variable that can be easily accessed.<br>
+Continue with data preprocessing as described [here](/notebooks/data_preprocessing/README.md).
 
 > **ToDo:** <br>
-- Update the file- and folderpaths in [data_paths.py](/utils/data_paths.py) for easy access in all subsequent steps.
+- Update the file- and folderpaths in [data_paths.py](/utils/data_paths.py) for easy access in all subsequent steps.<br>
+- Continue with data preprocessing.

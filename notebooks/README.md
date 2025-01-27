@@ -6,8 +6,8 @@ Set-up and run the notebooks in the following order:<br>
 - [02_calculate_total_VKT.ipynb](/notebooks/02_calculate_total_VKT.ipynb): Calculate and visualize the total vehicle kilometers travelled and annual changes of the VKT and the traffic condition.
 - [11_calculate_cold_emissions.ipynb](/notebooks/11_calculate_cold_emissions.ipynb): Calculate cold-start excess emissions and respective timeprofiles.
 - [12_calculate_hot_emissions.ipynb](/notebooks/12_calculate_hot_emissions.ipynb): Calculate hot exhaust vehicle emissions and respective timeprofiles.
-- (Optional) [13_calculate_detector_emissions.ipynb](/notebooks/13_calculate_detector_emissons.ipynb): Calculate emissions at a individual traffic counting detector level for subsequent uncertainty estimation. 
 - (Optional) [21_emission_gridding.ipynb](/notebooks/21_emission_gridding.ipynb): Combine cold-start and hot-exhaust emissions and rasterize the line-source emissions.
+- (Optional) [31_calculate_detector_emissions.ipynb](/notebooks/31_calculate_detector_emissons.ipynb): Calculate emissions at a individual traffic counting detector level for subsequent uncertainty estimation. 
 
 Detailed instructions are available in the respective notebook. Change the input parameters according to your application in the section **notebook_settings** of the respective notebook.
 

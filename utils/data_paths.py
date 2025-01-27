@@ -12,7 +12,6 @@ MUNICH_BOARDERS_FILE = abs_path + "/data/geodata/munich_boarders.gpkg"
 MUNICH_BOARDERS_EXTENDED_FILE = abs_path + "/data/geodata/munich_boarders_extended.gpkg"
 TNO_100M_GRID  = abs_path + "/data/geodata/TNO_100m_grid.gpkg"
 TNO_1km_GRID = abs_path + "/data/geodata/TNO_1km_grid.gpkg"
-ALKIS_MUNICH = abs_path + "/data/geodata/ALKIS_Munich/Nutzung.shp"
 
 # traffic model
 VISUM_FOLDER_PATH = abs_path + "/data/restricted_input/visum/"
@@ -26,7 +25,6 @@ COMBINED_COUNTING_DATA = COUNTING_PATH + "counting_data_combined.parquet"
 
 # HBEFA emission factors
 EF_PATH = abs_path + "/data/restricted_input/hbefa/"
-EF_TS = abs_path + "/data/restricted_input/hbefa/EFA_HOT_ts_hbefa.txt"
 EF_AGG = abs_path + "/data/restricted_input/hbefa/EFA_HOT_aggregated_hbefa.txt"
 EF_COLD = abs_path + "/data/restricted_input/hbefa/EFA_ColdStart_hbefa.txt"
 

@@ -1,10 +1,12 @@
-matplotlib 
+matplotlib
+seaborn
 pandas
 geopandas
 numpy
 shapely
 ipython
 jupyter
+jupyterlab
 seaborn 
 rtree
 xlrd

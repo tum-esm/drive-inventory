@@ -5,7 +5,7 @@
 Pre-Processing of the counting station locations is a two-step approach. The first step is to clean the original input format of the location information and convert it into a standardized data format. If they are not yet referenced to the road links in the traffic model, manually add the *road_link_id* of the respective road link to the location information. We subselected couting stations in our area of interest and performed the manual referencing using [QGIS](https://www.qgis.org/).
 
 >**_ToDo:_**
->- Clean and convert the location data to a standardized format. (Use [preprocess_mst_locations.ipynb](/notebooks/data_preprocessing/preprocess_mst_locations.ipynb) and [preprocess_bast_locations.ipynb](/notebooks/data_preprocessing/preprocess_bast_locations.ipynb) for reference.)
+>- Clean and convert the location data to a standardized format. (Use [02_preprocess_mst_locations.ipynb](/notebooks/data_preprocessing/02_preprocess_mst_locations.ipynb) and [01_preprocess_bast_locations.ipynb](/notebooks/data_preprocessing/01_preprocess_bast_locations.ipynb) for reference.)
 >- Open the cleaned locations file as well as the traffic model in a GIS software.
 >- Delete useless counters (e.g. bulk of counters around event locations) as well as counters outside your region of interest.
 >- Precisely allocate the detector location on the respective road link. Reference by adding the *road_link_id* to the location of the detector.
@@ -24,7 +24,7 @@ Pre-Processing of the counting station locations is a two-step approach. The fir
 The traffic counting data can be sourced from different providers and must be converted to a unified format before further processing. Additionally, the 8+1 vehicle classification needs to be mapped to the classification available in HEBFA.
 
 >**_ToDo:_**
->- Open, clean and convert raw counting data to the data format shown below. Use [preprocess_mst_counting_data.ipynb](/notebooks/data_preprocessing/preprocess_mst_counting_data.ipynb) and [preprocess_bast_counting_data.ipynb](/notebooks/data_preprocessing/preprocess_bast_counting_data.ipynb) for reference.
+>- Open, clean and convert raw counting data to the data format shown below. Use [12_preprocess_mst_counting_data.ipynb](/notebooks/data_preprocessing/12_preprocess_mst_counting_data.ipynb) and [11_preprocess_bast_counting_data.ipynb](/notebooks/data_preprocessing/11_preprocess_bast_counting_data.ipynb) for reference.
 
 ### Data format for traffic counting data
 |Attribute |Description|
@@ -44,7 +44,7 @@ The traffic counting data can be sourced from different providers and must be co
 Now the traffic model must be pre-processed and converted into the required format. We used a macroscopic traffic model (PTV VISUM) that represents the average weekday traffic outside vacation time for Passenger Cars (PC), Light Cargo Vehicles (LCV) and Heavy Goods Vehicles (HGV). It also provides the number of vehicle starts in defined spatial areas which is used to calculate the cold start excess emissions (CSEE). First, we import the traffic model outputs and convert important attributes to HEBFA compatible formats. Additional to the actual road type, we define an attribute *scaling_road_type* that combines multiple road types for temporal scaling. Then the vehicle share correction factors are calculated and the zonal number of vehicle starts is attributed to the road links.
 
 >**_ToDo:_**
->- Follow the steps defined in [preprocess_visum_model.ipynb](/notebooks/data_preprocessing/preprocess_visum_model.ipynb) and convert the traffic model to the data format defined below. 
+>- Follow the steps defined in [21_preprocess_visum_model.ipynb](/notebooks/data_preprocessing/21_preprocess_visum_model.ipynb) and convert the traffic model to the data format defined below. 
 
 ### Data format of the traffic model
 |Attribute |Description|
@@ -68,7 +68,7 @@ Now the traffic model must be pre-processed and converted into the required form
 Finally we combine the pre-processed counting data and add additional information from the calender and the traffic model to it. Data from multiple detectors is agregated, road type and day type information as well as two flags for data quality checks added. This is to produce the input datafile for the [traffic counts](/utils/traffic_counts.py) module which outputs daily and annual cycles and vehicle shares.
 
 >**_ToDo:_**
->- Follow the steps defined in [combine_preprocessed_files.ipynb](/notebooks/data_preprocessing/combine_preprocesed_files.ipynb) and convert the traffic model to the data format defined below. 
+>- Follow the steps defined in [31_combine_preprocessed_files.ipynb](/notebooks/data_preprocessing/31_combine_preprocesed_files.ipynb) and convert the traffic model to the data format defined below. 
 
 ### Combined data format for the traffic counting data
 |Attribute |Description|

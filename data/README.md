@@ -1,4 +1,4 @@
-# DDRIVE Data Requirements
+# DRIVE Data Requirements
 
 This folder contains the required data and generated outputs of the framework. It has three folders for input data ([auxiliary](/data/auxiliary/), [geodata](/data/geodata/) and [restricted input](/data/restricted_input/)) and one for the outputs ([inventory](/data/inventory/)). Most folders are empty and currently only provide a working structure as the data is individual for each use-case and cannot be shared publicly. Please go through the following steps carefully to assemble a suitable dataset for the emission calculation.<br>
 

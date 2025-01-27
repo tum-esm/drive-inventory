@@ -25,8 +25,8 @@ The project is part of [**ICOS Cities**](https://www.icos-cp.eu/projects/icos-ci
 2. Install required packages<br>
 ``pip install -r requirements.txt``
 3. Install jupyter kernel for the virtual environment.<br>
-``ipython kernel install --user --name=ddrive``
-4. Run a jupyterlab on your computer and select the virtual environment *ddrive* as kernel.<br>
+``ipython kernel install --user --name=drive-inventory``
+4. Run a jupyterlab on your computer and select the virtual environment *drive-inventory* as kernel.<br>
 ``jupyterlab``
 
 ### Application

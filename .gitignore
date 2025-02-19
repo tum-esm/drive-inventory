@@ -164,3 +164,8 @@ cython_debug/
 # visual strudio code
 .vscode/
 vscode
+
+# don't upload data files 
+data/restricted_input/counting_data
+data/restricted_input/hbefa
+data/restricted_input/traffic_model

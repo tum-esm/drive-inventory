@@ -6,7 +6,7 @@ abs_path = str(pathlib.Path(__file__).parent.parent.resolve())
 
 #INPUT DATA
 #auxiliary_data
-CALENDER_FILE = abs_path + "/data/auxiliary/calender_18to23.xlsx"
+CALENDER_FILE = abs_path + "/data/auxiliary/calender_18to24.xlsx"
 MUNICH_BOARDERS_FILE = abs_path + "/data/geodata/munich_boarders.gpkg"
 # extended boarders including the surrounding motorway
 MUNICH_BOARDERS_EXTENDED_FILE = abs_path + "/data/geodata/munich_boarders_extended.gpkg"

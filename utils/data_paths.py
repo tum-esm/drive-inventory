@@ -20,11 +20,11 @@ VISUM_FOLDER_PATH = abs_path + "/data/restricted_input/traffic_model/"
 COUNTING_PATH = abs_path + "/data/restricted_input/counting_data/"
 MST_COUNTING_PATH = abs_path + "/data/restricted_input/counting_data/lhm/"
 BAST_COUNTING_PATH = abs_path + "/data/restricted_input/counting_data/bast/"
-COMBINED_COUNTING_DATA = COUNTING_PATH + "counting_data_combined.parquet"
-
+COMBINED_COUNTING_DATA = COUNTING_PATH + "counting_data_combined_until2024.parquet"
 
 # HBEFA emission factors
 EF_PATH = abs_path + "/data/restricted_input/hbefa/"
+EF_TS = abs_path + "/data/restricted_input/hbefa/EFA_HOT_ts_hbefa.txt"
 EF_AGG = abs_path + "/data/restricted_input/hbefa/EFA_HOT_aggregated_hbefa.txt"
 EF_COLD = abs_path + "/data/restricted_input/hbefa/EFA_ColdStart_hbefa.txt"
 

@@ -14,7 +14,7 @@ TNO_100M_GRID  = abs_path + "/data/geodata/TNO_100m_grid.gpkg"
 TNO_1km_GRID = abs_path + "/data/geodata/TNO_1km_grid.gpkg"
 
 # traffic model
-VISUM_FOLDER_PATH = abs_path + "/data/restricted_input/visum/"
+VISUM_FOLDER_PATH = abs_path + "/data/restricted_input/traffic_model/"
 
 # traffic counting data
 COUNTING_PATH = abs_path + "/data/restricted_input/counting_data/"

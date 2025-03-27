@@ -2,7 +2,7 @@
 The path to the calender excel file should be defined in data_paths.py (utils)
 """
 
-__version__ = 2.2
+__version__ = 2.3
 __author__ = 'Daniel Kühbacher'
 
 import pandas as pd
@@ -14,12 +14,12 @@ from dateutil.parser import parse
 class Calendar:
     
     def __init__(self,
-                 years:list = [2018, 2019, 2020, 2021, 2022, 2023]) -> None:
+                 years:list = [2018, 2019, 2020, 2021, 2022, 2023, 2024]) -> None:
         """Initializes the calender object and loads from calender file
 
         Args:
             years (list, optional): years to parse from calendar xlsx file.
-            Defaults to [2018, 2019, 2020, 2021, 2022, 2023].
+            Defaults to [2018, 2019, 2020, 2021, 2022, 2023, 2024].
         """
         self.cal = self._fetch_calendar(years[0])
         for year in years[1:]:

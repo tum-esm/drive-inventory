@@ -1,6 +1,6 @@
 [project]
 name = "drive-inventory"
-version = "0.1.0"
+version = "1.1.0"
 description = "A data-driven framework to estimate road transport emissions."
 readme = "README.md"
 requires-python = ">=3.13"

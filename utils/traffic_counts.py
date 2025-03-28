@@ -69,7 +69,7 @@ class TrafficCounts:
                               _daily_median['PC'],
                               _daily_median['HGV']],axis=1).fillna(0).sum(axis=1)
         self.vehicle_shares = _daily_median/_sum_cnt
-    
+            
         # prepare annual cycles
         # normalize counting dataframe
         _counting_df_norm = self._normalize_count(_counting_df)
@@ -88,7 +88,7 @@ class TrafficCounts:
         hour_column_names = [str(i) for i in range(0,24)]
         _d_cycles = _counting_df.drop(_irrelevant_rows, axis=1).set_index('date')\
             .groupby(['day_type', 'vehicle_class'])[hour_column_names]\
-                .resample('1m').median()
+                .resample('1ME').median()
             
         # normalize daily cycles
         _d_cycles[hour_column_names] = _d_cycles[hour_column_names]\
@@ -207,7 +207,7 @@ class TrafficCounts:
             float: _description_
         """
         # Calculates Vehicles Sharefor all dates 
-        shares = self.vehicle_shares[:,date,:].reset_index()
+        shares = self.vehicle_shares[:,:,date].reset_index()
         shares = shares.pivot(columns='vehicle_class', index ='scaling_road_type', values = 0)
         return shares
 
@@ -303,7 +303,8 @@ class TrafficCounts:
 if __name__ == "__main__":
     """Test and example usage of the class
     """
-    count = TrafficCounts()
-    print("Alpha: \n", count.get_daily_scaling_factors(date = '2022-12-01'))
-    print("Gamma: \n", count.get_vehicle_share(date = '2022-12-01'))
-    print("Beta: \n", count.get_hourly_scaling_factors('2022-12-01'))
+    
+    count = TrafficCounts(init_timeprofile=False)
+    print("Alpha: \n", count.get_daily_scaling_factors(date = '2023-12-01'))
+    print("Gamma: \n", count.get_vehicle_share(date = '2023-12-01'))
+    print("Beta: \n", count.get_hourly_scaling_factors('2023-12-01'))

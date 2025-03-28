@@ -18,15 +18,8 @@ The project is part of [**ICOS Cities**](https://www.icos-cp.eu/projects/icos-ci
 
 
 ### IDE Setup
-1. Install and activate python in a virtual environment<br>
-``python3 -m venv .venv``<br>
-``source .venv/bin/activate``
-2. Install required packages<br>
-``pip install -r requirements.txt``
-3. Install jupyter kernel for the virtual environment.<br>
-``ipython kernel install --user --name=drive-inventory``
-4. Run a jupyterlab on your computer and select the virtual environment *drive-inventory* as kernel.<br>
-``jupyterlab``
+`uv`is used for dependency management in this project. Make sure you have uv installed on your device ([installation instruction](https://docs.astral.sh/uv/getting-started/installation/))<br>
+To set up the project and create a virtual environment run `uv sync`. Make sure, run all scripts and notebooks in the respective environment.
 
 ### Application
 When the data requirements are fulfilled and the IDE is running, please refer to the [notebooks folder](/notebooks/README.md) for further instructions.<br>

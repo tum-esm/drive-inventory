@@ -10,8 +10,8 @@ CALENDER_FILE = abs_path + "/data/auxiliary/calender_18to24.xlsx"
 MUNICH_BOARDERS_FILE = abs_path + "/data/geodata/munich_boarders.gpkg"
 # extended boarders including the surrounding motorway
 MUNICH_BOARDERS_EXTENDED_FILE = abs_path + "/data/geodata/munich_boarders_extended.gpkg"
-TNO_100M_GRID  = abs_path + "/data/geodata/TNO_100m_grid.gpkg"
-TNO_1km_GRID = abs_path + "/data/geodata/TNO_1km_grid.gpkg"
+TNO_100M_GRID  = abs_path + "/data/geodata/TNO_100m_grid_munich.gpkg"
+TNO_1km_GRID = abs_path + "/data/geodata/TNO_1km_grid_munich.gpkg"
 
 # traffic model
 VISUM_FOLDER_PATH = abs_path + "/data/restricted_input/traffic_model/"

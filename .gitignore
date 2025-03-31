@@ -165,7 +165,8 @@ cython_debug/
 .vscode/
 vscode
 
-# don't upload data files 
+# don't upload these data files 
 data/restricted_input/counting_data
 data/restricted_input/hbefa
 data/restricted_input/traffic_model
+data/inventory

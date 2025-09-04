@@ -91,8 +91,8 @@ class GriddingEngine:
     def overlay_grid(self, 
                      geom_input : gpd.GeoDataFrame,
                      value_columns : list|str,
-                     source_type : Literal['area', 'line_meter', 'line_kilometer'])\
-                         -> gpd.GeoDataFrame:
+                     source_type : Literal['area', 'line_meter', 'line_kilometer'], 
+                     estimate_dominant_road_type : bool  = False) -> gpd.GeoDataFrame:
         """Overlay emission sources with grid and calculate gridded product
 
         Args:
@@ -136,8 +136,14 @@ class GriddingEngine:
         # join geodata with grid cells and sum emissions of the cell
         gridded_aux = gpd.sjoin(self.grid, data_geo, how="right", predicate='contains')
         em_grouped = gridded_aux.groupby('index_left').sum(numeric_only = True)
-        
-        return_grid = self.grid.copy()
+
+        return_grid = gpd.GeoDataFrame(geometry=self.grid['geometry'])
+
+        if estimate_dominant_road_type:
+            agg = gridded_aux.groupby(['index_left', 'road_type'])[value_columns].sum().sum(axis = 1).reset_index()
+            dominant_road_type = agg.loc[agg.groupby("index_left")[0].idxmax()].reset_index(drop=True)
+            dominant_road_type.set_index('index_left', inplace=True)
+            return_grid['dominant_road_type'] = dominant_road_type['road_type']
         
         if isinstance(value_columns, list):
             for col in value_columns:

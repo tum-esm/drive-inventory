@@ -1,3 +1,4 @@
+import os
 from dotenv import dotenv_values
 import requests
 import json
@@ -6,12 +7,20 @@ import re
 import base64
 import pandas as pd
 from io import StringIO
+import data_paths
+
 #request HBEFA emission factors for specific parameters and save results as parquet file
 # Parameters:
 # emcat: emission category (hot, start, evap-soaked, evap-diurnal, evap-lr)
 # yearref: reference year for emission factors e.g. 2024
 # agglevel_ts: aggregation level for traffic situation (aggregate_ts, single_ts, static_ts)
 def request_hbefa(emcat="hot", yearref="2024", agglevel_ts="aggregate_ts"):
+    #Check if file already exists
+    filename = f'{data_paths.EF_PATH}{yearref}_{emcat}_{agglevel_ts}.parquet'
+    if os.path.exists(filename):
+        print(f"File {filename} already exists. Skipping request.")
+        return
+
     # Load credentials from .env file
     mail = dotenv_values(".env").get("HBEFA_EMAIL")
     password = dotenv_values(".env").get("HBEFA_PASSWORD")
@@ -85,7 +94,7 @@ def request_hbefa(emcat="hot", yearref="2024", agglevel_ts="aggregate_ts"):
             df = pd.read_json(StringIO(emission_factors))
             df.to_json('test.json')
             df.to_csv('test.csv', index=True, index_label="index")
-            df.to_parquet(f'{yearref}_{emcat}_{agglevel_ts}.parquet', index=True)
+            df.to_parquet(f'{filename}', index=True)
             break
 
         time.sleep(3)
@@ -93,5 +102,5 @@ def request_hbefa(emcat="hot", yearref="2024", agglevel_ts="aggregate_ts"):
         print("Timed out waiting for result")
 # Press the green button in the gutter to run the script.
 
-#if __name__ == "__main__":
-#    request_hbefa()
+if __name__ == "__main__":
+    request_hbefa()

@@ -7,7 +7,7 @@ import base64
 import pandas as pd
 from io import StringIO
 
-def request_hbefa():
+def request_hbefa(emcat="hot", yearref="2024", agglevel_ts="aggregate_ts"):
     # Load credentials from .env file
     mail = dotenv_values(".env").get("HBEFA_EMAIL")
     password = dotenv_values(".env").get("HBEFA_PASSWORD")
@@ -36,15 +36,15 @@ def request_hbefa():
     # Now submit the job using the session
     payload = {
         "country": "D",
-        "pollutant": "CO,NO2",
-        "emcat": "hot",
+        "pollutant": "NOx,FC,CO2(rep),CO2(total),NO2,CH4,NMHC,Pb,SO2,Benzene,HC,CO,CO2e,PM10-ex,PM2.5-ex,PN23-ex,BC-ex",
+        "emcat": emcat,
         "hbversion_int": "501006",
-        "agglevel_ts": "aggregate_ts",
-        "idvehcat": "1",
+        "agglevel_ts": agglevel_ts,
+        "idvehcat": "1,2", # 1= PC, 2=LCV, 3=HGV, 4=Coach, 5=Bus, 6=Motorcycle
         "wgt": "True",
         "idtraffic_scen": "48",
         "idtsgrad": "524",
-        "yearref": "2024",
+        "yearref": yearref,
         "agglevel_fleet": "vehcat",
         "agglevel_energy": "none",
         "nocorr": "False",
@@ -81,6 +81,7 @@ def request_hbefa():
             df = pd.read_json(StringIO(emission_factors))
             df.to_json('test.json')
             df.to_csv('test.csv', index=True, index_label="index")
+            df.to_parquet(f'{yearref}_{emcat}_{agglevel_ts}.parquet', index=True)
             break
 
         time.sleep(3)
@@ -88,5 +89,5 @@ def request_hbefa():
         print("Timed out waiting for result")
 # Press the green button in the gutter to run the script.
 
-if __name__ == "__main__":
-    request_hbefa()
+#if __name__ == "__main__":
+#    request_hbefa()

@@ -8,8 +8,10 @@ import pandas as pd
 from io import StringIO
 
 def request_hbefa():
+    # Load credentials from .env file
+    mail = dotenv_values(".env").get("HBEFA_EMAIL")
+    password = dotenv_values(".env").get("HBEFA_PASSWORD")
     BASE_URL = "https://hbefa-server-repo.azurewebsites.net"
-
     session = requests.Session()
     get_response = session.get(f"{BASE_URL}/login")
 
@@ -20,8 +22,8 @@ def request_hbefa():
     login_response = session.post(
         f"{BASE_URL}/login",
         data={
-            "email": "email",
-            "password": "password",
+            "email": mail,
+            "password": password,
             "csrf_token": csrf_token,
             "submit": "Login"
         },
@@ -86,3 +88,5 @@ def request_hbefa():
         print("Timed out waiting for result")
 # Press the green button in the gutter to run the script.
 
+if __name__ == "__main__":
+    request_hbefa()

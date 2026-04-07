@@ -102,5 +102,5 @@ def request_hbefa(emcat="hot", yearref="2024", agglevel_ts="aggregate_ts"):
         print("Timed out waiting for result")
 # Press the green button in the gutter to run the script.
 
-if __name__ == "__main__":
-    request_hbefa()
+#if __name__ == "__main__":
+#    request_hbefa()

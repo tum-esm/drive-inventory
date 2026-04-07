@@ -6,7 +6,11 @@ import re
 import base64
 import pandas as pd
 from io import StringIO
-
+#request HBEFA emission factors for specific parameters and save results as parquet file
+# Parameters:
+# emcat: emission category (hot, start, evap-soaked, evap-diurnal, evap-lr)
+# yearref: reference year for emission factors e.g. 2024
+# agglevel_ts: aggregation level for traffic situation (aggregate_ts, single_ts, static_ts)
 def request_hbefa(emcat="hot", yearref="2024", agglevel_ts="aggregate_ts"):
     # Load credentials from .env file
     mail = dotenv_values(".env").get("HBEFA_EMAIL")

@@ -98,7 +98,9 @@ def request_hbefa(emcat="hot", yearref="2024", agglevel_ts="aggregate_ts"):
             #df.to_csv('test.csv', index=True, index_label="index")
             df.to_parquet(f'{filename}', index=True)
             break
-
+        if result.status_code != 202:
+            print("Error retrieving result:", result.status_code, result.text)
+            break
         time.sleep(3)
     else:
         print("Timed out waiting for result")

@@ -33,6 +33,7 @@ class HbefaColdEmissions:
         
         self.components = components
         
+        hbefa_requests.request_hbefa(emcat="start", yearref="2024", agglevel_ts="aggregate_ts")
         # load emission factors from file
         self.emission_factors = self._import_hbefa_coldstart_ef(
             data_paths.EF_PATH + "2024_start_aggregate_ts.parquet")
@@ -50,7 +51,6 @@ class HbefaColdEmissions:
         """
         #TODO : Check if EFA is already weighted.
         try:
-            hbefa_requests.request_hbefa(emcat="start", yearref="2024", agglevel_ts="aggregate_ts")
             ef = pd.read_parquet(filepath, columns= ['Vehicle category', 'Reference year', 'Pollutant',
                                 'Ambient cond. pattern', 'EFA'])
             ef.rename(columns={'Vehicle category': 'VehCat', 'Reference year': 'Year', 'Pollutant': 'Component',

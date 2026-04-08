@@ -69,9 +69,9 @@ def request_hbefa(emcat="hot", yearref="2024", agglevel_ts="aggregate_ts"):
         "agg_cols": "False",
         "verbose": "False",
         "test_outputs": "False",
-        "calc_wtt": "True",
+        "calc_wtt": "True", #Doesn't exist for HBEFA 5.1, but doesn't cause an error if included in the request
         "idenergymix_scen": "3",
-        "idpatternambientcond": "9901,9951,10001,10051,10101,10151,10201,10251",
+        "idpatternambientcond": "9901,9951,10001,10051,10101,10151,10201,10251", # Ambient conditions: 8 temperature levels from -10°C to +25°C (in 5°C steps),each with average parking time and average trip length (tØ/dØ)
     }
 
     response = session.post(f"{BASE_URL}/efa-async", json=payload)
@@ -94,8 +94,8 @@ def request_hbefa(emcat="hot", yearref="2024", agglevel_ts="aggregate_ts"):
             emission_factors = data.get("Emission factors")
             print(emission_factors)
             df = pd.read_json(StringIO(emission_factors))
-            df.to_json('test.json')
-            df.to_csv('test.csv', index=True, index_label="index")
+            #df.to_json('test.json')
+            #df.to_csv('test.csv', index=True, index_label="index")
             df.to_parquet(f'{filename}', index=True)
             break
 

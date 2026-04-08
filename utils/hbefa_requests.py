@@ -49,7 +49,8 @@ def request_hbefa(emcat="hot", yearref="2024", agglevel_ts="aggregate_ts"):
     # Now submit the job using the session
     payload = {
         "country": "D",
-        "pollutant": "NOx,FC,CO2(rep),CO2(total),NO2,CH4,NMHC,Pb,SO2,Benzene,HC,CO,CO2e,PM10-ex,PM2.5-ex,PN23-ex,BC-ex",
+        #"pollutant": "NOx,FC,CO2(rep),CO2(total),NO2,CH4,NMHC,Pb,SO2,Benzene,HC,CO,CO2e,PM10-ex,PM2.5-ex,PN23-ex,BC-ex",
+        "pollutant": "CO2(rep),NOx,CO",
         "emcat": emcat,
         "hbversion_int": "501006",
         "agglevel_ts": agglevel_ts,
@@ -68,8 +69,9 @@ def request_hbefa(emcat="hot", yearref="2024", agglevel_ts="aggregate_ts"):
         "agg_cols": "False",
         "verbose": "False",
         "test_outputs": "False",
-        "calc_wtt": "False",
-        "idenergymix_scen": "3"
+        "calc_wtt": "True",
+        "idenergymix_scen": "3",
+        "idpatternambientcond": "9901,9951,10001,10051,10101,10151,10201,10251",
     }
 
     response = session.post(f"{BASE_URL}/efa-async", json=payload)
@@ -78,7 +80,7 @@ def request_hbefa(emcat="hot", yearref="2024", agglevel_ts="aggregate_ts"):
 
     # Poll for result
     task_id = response.json().get("task_id")
-    for i in range(30):
+    for i in range(50):
         result = session.get(f"{BASE_URL}/efa-async/{task_id}")
         print(f"Poll {i + 1}: {result.status_code} - {result.text[:100]}")
 
@@ -102,5 +104,5 @@ def request_hbefa(emcat="hot", yearref="2024", agglevel_ts="aggregate_ts"):
         print("Timed out waiting for result")
 # Press the green button in the gutter to run the script.
 
-#if __name__ == "__main__":
-#    request_hbefa()
+if __name__ == "__main__":
+    request_hbefa()

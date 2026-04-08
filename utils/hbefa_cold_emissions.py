@@ -9,6 +9,7 @@ import pandas as pd
 from typing import Literal
 
 import data_paths
+import hbefa_requests as hbefa_requests
 
 class HbefaColdEmissions: 
     """Class to calculate cold start emissions based on HBEFA emission factors.
@@ -34,7 +35,7 @@ class HbefaColdEmissions:
         
         # load emission factors from file
         self.emission_factors = self._import_hbefa_coldstart_ef(
-            data_paths.EF_COLD)
+            data_paths.EF_PATH + "2024_start_aggregate_ts.parquet")
 
 
     def _import_hbefa_coldstart_ef(self,
@@ -47,19 +48,19 @@ class HbefaColdEmissions:
         Returns:
             dict: emission factors
         """
+        #TODO : Check if EFA is already weighted.
         try:
+            hbefa_requests.request_hbefa(emcat="start", yearref="2024", agglevel_ts="aggregate_ts")
+            ef = pd.read_parquet(filepath, columns= ['Vehicle category', 'Reference year', 'Pollutant',
+                                'Ambient cond. pattern', 'EFA'])
+            ef.rename(columns={'Vehicle category': 'VehCat', 'Reference year': 'Year', 'Pollutant': 'Component',
+                               'Ambient cond. pattern': 'AmbientCondPattern', 'EFA': 'EFA_weighted'}, inplace=True)
             
-            ef = pd.read_csv(filepath, sep=';', encoding='latin_1',
-                on_bad_lines= 'skip', decimal=',')
-
-            columns_to_keep = ['VehCat', 'Year', 'Component',
-                                'AmbientCondPattern', 'EFA_weighted']
-
             # convert Vehicle Categorie to common acronym
             ef.loc[ef['VehCat']=='pass. car', 'VehCat'] = 'PC'
-            ef = ef[columns_to_keep] # reduce to interesting columns
             ef = ef.set_index(['VehCat', 'Year','Component', 'AmbientCondPattern'])
             print(f'Loaded emission factors from {filepath}')
+            ef.to_parquet(data_paths.EF_PATH + "test.parquet") # save a copy of the emission factors in parquet format for faster loading in the future
             return ef
     
         except Exception as e:
@@ -128,6 +129,6 @@ if __name__ == '__main__':
     k = c.calculate_emission_hourly(vehicle_starts = 10,
                                     hourly_temperature = temperature,
                                     vehicle_class = 'PC',
-                                    year = 2019)
+                                    year = 2024)
     
     print(k)

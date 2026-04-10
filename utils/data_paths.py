@@ -5,8 +5,10 @@ import pathlib
 abs_path = str(pathlib.Path(__file__).parent.parent.resolve())
 
 #INPUT DATA
+DATA_PATH = abs_path + "/data/"
 #auxiliary_data
 CALENDER_FILE = abs_path + "/data/auxiliary/calender_18to24.xlsx"
+BAST_LOCATIONS_FILE = abs_path + "/data/auxiliary/bast_locations_selected.gpkg"
 MUNICH_BOARDERS_FILE = abs_path + "/data/geodata/munich_boarders.gpkg"
 # extended boarders including the surrounding motorway
 MUNICH_BOARDERS_EXTENDED_FILE = abs_path + "/data/geodata/munich_boarders_extended.gpkg"

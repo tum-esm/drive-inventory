@@ -55,8 +55,41 @@ def request_hbefa(emcat="hot", yearref="2024", agglevel_ts="aggregate_ts"):
         "hbversion_int": "501006",
         "agglevel_ts": agglevel_ts,
         "idvehcat": "1,2", # 1= PC, 2=LCV, 3=HGV, 4=Coach, 5=Bus, 6=Motorcycle
-        "wgt": "True",
+        "wgt": "True", # Whether to weight emission factors by fleet composition (True/False).
         "idtraffic_scen": "48",
+        # Aggregated traffic situation pattern: idtsgrad
+        # For Germany:
+        # --- Current (UBA) ---
+        #   521: D Ø-MW UBA 2024        (Motorway only)
+        #   522: D Ø-Rural UBA 2024     (Rural only)
+        #   523: D Ø-Urban UBA 2024     (Urban only)
+        #   524: D Ø UBA 2024           (All road categories)
+        #
+        #   421: D Ø-MW UBA 2023
+        #   422: D Ø-Rural UBA 2023
+        #   423: D Ø-Urban UBA 2023
+        #   424: D Ø UBA 2023
+        #
+        #   332: D Ø UBA 2022
+        #   333: D Ø-MW UBA 2022
+        #   334: D Ø-Rural UBA 2022
+        #   335: D Ø-Urban UBA 2022
+        #
+        #   221: D Ø-MW UBA 2021
+        #   222: D Ø-Rural UBA 2021
+        #   223: D Ø-Urban UBA 2021
+        #   224: D Ø UBA 2021
+        #   324: D Ø UBA 2021 detailed
+        #   328: D Ø-MW UBA 2021 korr
+        #   329: D Ø-Rural UBA 2021 korr
+        #   330: D Ø-Urban UBA 2021 korr
+        #   331: D Ø UBA 2021 korr
+        #
+        # --- Outdated (IFEU, Nov 2009) ---
+        #   121: Germany Motorway
+        #   122: Germany Rural
+        #   123: Germany Urban
+        #   124: Germany all Road Categories
         "idtsgrad": "524",
         "yearref": yearref,
         "agglevel_fleet": "vehcat",
@@ -71,6 +104,117 @@ def request_hbefa(emcat="hot", yearref="2024", agglevel_ts="aggregate_ts"):
         "test_outputs": "False",
         "calc_wtt": "True", #Doesn't exist for HBEFA 5.1, but doesn't cause an error if included in the request
         "idenergymix_scen": "3",
+        # Available road gradients (idgrad):
+        # 30: 0%
+        # 32: +/-2%
+        # 34: +/-4%
+        # 36: +/-6%
+        # 54: -6%
+        # 56: -4%
+        # 58: -2%
+        # 62: +2%
+        # 64: +4%
+        # 66: +6%
+        "idgrad": "30",
+        # Available traffic scenarios (idtraffic_scen):
+        # idarea (area):
+        #   1: Rural
+        #   2: Urban
+        #
+        # idroadtype (road type):
+        #   10: Motorway-Nat.
+        #   11: Motorway-City
+        #   12: Semi-Motorway
+        #   20: Primary-nat. non-motorway
+        #   21: Primary-city non-motorway
+        #   30: Distributor/Secondary
+        #   31: Distributor/Secondary (sinuous)
+        #   40: Local/Collector
+        #   41: Local/Collector (sinuous)
+        #   50: Access-residential
+        #
+        # idspeedlimit (speed limit in km/h):
+        #   03: 30,  04: 40,  05: 50,  06: 60,  07: 70,  08: 80
+        #   09: 90, 10: 100, 11: 110, 12: 120, 13: 130, 14: >130
+        #
+        # idlos (level of service):
+        #   1: Freeflow
+        #   2: Heavy
+        #   3: Saturated
+        #   4: Stop+go
+        #   5: Stop+go_II
+        #
+        # Example: 110081 -> area=Rural, Motorway-Nat., speedlimit=80, LOS=Freeflow
+        "idts": "110081",
+        # Available ambient condition patterns (idpatternambientcond):
+                # --- Simple patterns (averaged dimensions) ---
+        # ID  : label                  : description
+        #   1 : ØGermany               : Ø trip lengths, Ø parking times
+        #  11 : Ø/spring               : Ø trip lengths, Ø parking times
+        #  12 : Ø/summer               : Ø trip lengths, Ø parking times
+        #  13 : Ø/autumn               : Ø trip lengths, Ø parking times
+        #  14 : Ø/winter               : Ø trip lengths, Ø parking times
+        #  14 : Ø/winter               : Ø trip lengths, Ø parking times
+        #  20 : Øgermany (imported)    : from UBA/HBEFA country data template
+        #  21 : Ø/spring (imported)    : from UBA/HBEFA country data template
+        #  22 : Ø/summer (imported)    : from UBA/HBEFA country data template
+        #  23 : Ø/autumn (imported)    : from UBA/HBEFA country data template
+        #  24 : Ø/winter (imported)    : from UBA/HBEFA country data template
+        #  25 : Øgermany (imported v4) : from UBA/HBEFA country data template
+        #  30 : Øgermany (imported v4) : from UBA/HBEFA country data template
+        #
+        # --- Selected trip length only (Ø temp, Ø parking) ---
+        # 211: TØ, tØ, 0-1km
+        # 212: TØ, tØ, 1-2km
+        # 213: TØ, tØ, 2-3km
+        # 214: TØ, tØ, 3-4km
+        # 215: TØ, tØ, >20km
+        #
+        # --- Selected parking time only (Ø temp, Ø trip length) ---
+        # 251: TØ, 0-1h,  dØ
+        # 252: TØ, 1-2h,  dØ
+        # 253: TØ, 2-3h,  dØ
+        # 254: TØ, 3-4h,  dØ
+        # 255: TØ, 4-5h,  dØ
+        # 256: TØ, 5-6h,  dØ
+        # 257: TØ, 6-7h,  dØ
+        # 258: TØ, 7-8h,  dØ
+        # 259: TØ, 8-9h,  dØ
+        # 260: TØ, 9-10h, dØ
+        # 261: TØ, 10-11h,dØ
+        # 262: TØ, 11-12h,dØ
+        # 263: TØ, >12h,  dØ
+        #
+        # --- Selected parking time AND trip length (Ø temp) ---
+        # Format: 3XY where X = parking time bin, Y = trip length bin
+        # 311-343: TØ, parking 0-1h .. >12h, trip 0-1km
+        # 331-343: TØ, parking 0-1h .. >12h, trip 1-2km
+        # (pattern continues for all combinations)
+        #
+        # --- Fixed temperature + averaged other dims (1Temp) ---
+        # IDs ~9901-10251, step 50 per temperature:
+        #  9901: T-10°C, tØ, dØ
+        #  9951: T-5°C,  tØ, dØ
+        # 10001: T+0°C,  tØ, dØ
+        # 10051: T+5°C,  tØ, dØ
+        # 10101: T+10°C, tØ, dØ
+        # 10151: T+15°C, tØ, dØ
+        # 10201: T+20°C, tØ, dØ
+        # 10251: T+25°C, tØ, dØ
+        #
+        # --- Full pattern: fixed temp + parking time + trip length ---
+        # IDs 11XXX: pattern temperature, selected parking time and trip length
+        # Naming: T{temp}°C, {parking_bin}, {trip_bin}
+        # Temperature bins: -10, 0, +10, +20°C
+        # Parking time bins: 0-1h, 1-2h, 2-3h, 3-4h, 4-5h, >12h
+        # Trip length bins:  0-1km, 1-2km, 2-3km, 3-4km, 4-5km, >5km
+        #
+        # Examples:
+        # 11311: T+20°C, 0-1h,  0-1km
+        # 11711: T+0°C,  0-1h,  0-1km
+        # 11911: T-10°C, 0-1h,  0-1km
+        # IDs ending in 9 (e.g. 11319, 11329) = Ø trip length for that parking bin
+        # IDs ending in 99 (e.g. 11399, 11999) = >12h parking, >5km trip (max bin)
         "idpatternambientcond": "9901,9951,10001,10051,10101,10151,10201,10251", # Ambient conditions: 8 temperature levels from -10°C to +25°C (in 5°C steps),each with average parking time and average trip length (tØ/dØ)
     }
 
@@ -107,4 +251,8 @@ def request_hbefa(emcat="hot", yearref="2024", agglevel_ts="aggregate_ts"):
 # Press the green button in the gutter to run the script.
 
 if __name__ == "__main__":
-    request_hbefa()
+    request_hbefa("hot", "2024", "single_ts")
+    #t1 =pd.read_parquet(f'{data_paths.EF_PATH}2024_hot_aggregate_ts.parquet')
+    #t1.info()
+    #t2 = pd.read_parquet(f'{data_paths.EF_PATH}2024_hot_aggregate_ts2.parquet')
+    #t2.info()

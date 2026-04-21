@@ -6,7 +6,7 @@ abs_path = str(pathlib.Path(__file__).parent.parent.resolve())
 
 #INPUT DATA
 #auxiliary_data
-CALENDER_FILE = abs_path + "/data/auxiliary/calender_18to24.xlsx"
+CALENDER_FILE = abs_path + "/data/auxiliary/calender_18to26.xlsx"
 MUNICH_BOARDERS_FILE = abs_path + "/data/geodata/munich_boarders.gpkg"
 # extended boarders including the surrounding motorway
 MUNICH_BOARDERS_EXTENDED_FILE = abs_path + "/data/geodata/munich_boarders_extended.gpkg"
@@ -22,7 +22,7 @@ COUNTING_PATH = abs_path + "/data/restricted_input/counting_data/"
 MST_COUNTING_PATH = abs_path + "/data/restricted_input/counting_data/lhm/"
 MST_COUNTING_PATH_2025 = abs_path + "/data/restricted_input/counting_data/lhm/from_2025/"
 BAST_COUNTING_PATH = abs_path + "/data/restricted_input/counting_data/bast/"
-COMBINED_COUNTING_DATA = COUNTING_PATH + "counting_data_combined_until2024_v2.parquet"
+COMBINED_COUNTING_DATA = COUNTING_PATH + "counting_data_combined_from2025.parquet"
 
 # HBEFA emission factors
 EF_PATH = abs_path + "/data/restricted_input/hbefa/"

@@ -65,11 +65,12 @@ def request_hbefa(emcat="hot", yearref="2024", agglevel_ts="aggregate_ts"):
         # PM10-nx-road, PM10-nx-resusp, PM2.5-nx-tyre, PM2.5-nx-brake,
         # PM2.5-nx-road, PM2.5-nx-resusp, PN23-nx-brake, PN23-nx-road,
         # PN23-nx-resusp, PN23-nx
-        "pollutant": "CO2(rep),NOx,CO",
+        "pollutant": "CO,NOx,NO2,CO2(rep),CO2(total),PM10-ex,CH4,PM10-nx,PM2.5-ex,BC-ex,PM2.5-nx,BC-nx",
         "emcat": emcat,
         "hbversion_int": "501006",
         "agglevel_ts": agglevel_ts,
-        "idvehcat": "1,2", # 1= PC, 2=LCV, 3=HGV, 4=Coach, 5=Bus, 6=Motorcycle
+        #"idvehcat": "1",
+        "idvehcat": "1,2,14,6,9", #TODO -> Check values: 1= PC, 2=LCV, 3=HGV, 4=Coach, 5=Bus, 6=Motorcycle
         "wgt": "True", # Whether to weight emission factors by fleet composition (True/False).
         "idtraffic_scen": "48",
         # Aggregated traffic situation pattern: idtsgrad
@@ -105,7 +106,7 @@ def request_hbefa(emcat="hot", yearref="2024", agglevel_ts="aggregate_ts"):
         #   122: Germany Rural
         #   123: Germany Urban
         #   124: Germany all Road Categories
-        "idtsgrad": "524",
+        "idtsgrad": "523",
         "yearref": yearref,
         "agglevel_fleet": "vehcat",
         "agglevel_energy": "none",
@@ -130,13 +131,14 @@ def request_hbefa(emcat="hot", yearref="2024", agglevel_ts="aggregate_ts"):
         # 62: +2%
         # 64: +4%
         # 66: +6%
-        "idgrad": "30",
+        #"idgrad": "30,54,56,58,62,64,66",
         # Available traffic scenarios (idtraffic_scen):
-        # idarea (area):
+        "idarea": "2",
         #   1: Rural
         #   2: Urban
         #
         # idroadtype (road type):
+        "idroadtype":"10,20,21,30,40,50",
         #   10: Motorway-Nat.
         #   11: Motorway-City
         #   12: Semi-Motorway
@@ -160,7 +162,7 @@ def request_hbefa(emcat="hot", yearref="2024", agglevel_ts="aggregate_ts"):
         #   5: Stop+go_II
         #
         # Example: 110081 -> area=Rural, Motorway-Nat., speedlimit=80, LOS=Freeflow
-        "idts": "110081",
+        #"idts": "110081,110082",
         # Available ambient condition patterns (idpatternambientcond):
                 # --- Simple patterns (averaged dimensions) ---
         # ID  : label                  : description
@@ -240,7 +242,7 @@ def request_hbefa(emcat="hot", yearref="2024", agglevel_ts="aggregate_ts"):
 
     # Poll for result
     task_id = response.json().get("task_id")
-    for i in range(50):
+    for i in range(500):
         result = session.get(f"{BASE_URL}/efa-async/{task_id}")
         print(f"Poll {i + 1}: {result.status_code} - {result.text[:100]}")
 
@@ -267,7 +269,7 @@ def request_hbefa(emcat="hot", yearref="2024", agglevel_ts="aggregate_ts"):
 # Press the green button in the gutter to run the script.
 
 if __name__ == "__main__":
-    request_hbefa("hot", "2024", "single_ts")
+    request_hbefa("start", "2024", "single_ts")
     #t1 =pd.read_parquet(f'{data_paths.EF_PATH}2024_hot_aggregate_ts.parquet')
     #t1.info()
     #t2 = pd.read_parquet(f'{data_paths.EF_PATH}2024_hot_aggregate_ts2.parquet')

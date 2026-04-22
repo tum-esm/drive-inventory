@@ -9,12 +9,21 @@ import pandas as pd
 from io import StringIO
 import data_paths
 
-#request HBEFA emission factors for specific parameters and save results as parquet file
 # Parameters:
 # emcat: emission category (hot, start, evap-soaked, evap-diurnal, evap-lr)
 # yearref: reference year for emission factors e.g. 2024
 # agglevel_ts: aggregation level for traffic situation (aggregate_ts, single_ts, static_ts)
 def request_hbefa(emcat="hot", yearref="2024", agglevel_ts="aggregate_ts"):
+    """
+    Request HBEFA emission factors for specific parameters and save results as parquet file. Requires valid HBEFA credentials stored in .env file.
+    Args:
+        emcat: The emission category: "hot", "start", "evap-soaked", "evap-diurnal", "evap-lr".
+        yearref: The reference year, e.g. "2024".
+        agglevel_ts: The aggregation level: "aggregate_ts", "single_ts", "static_ts".
+
+    Returns:
+        None. Saves the requested emission factors as a parquet file in the specified path.
+    """
     #Check if file already exists
     filename = f'{data_paths.EF_PATH}{yearref}_{emcat}_{agglevel_ts}.parquet'
     if os.path.exists(filename):
@@ -49,7 +58,13 @@ def request_hbefa(emcat="hot", yearref="2024", agglevel_ts="aggregate_ts"):
     # Now submit the job using the session
     payload = {
         "country": "D",
-        #"pollutant": "NOx,FC,CO2(rep),CO2(total),NO2,CH4,NMHC,Pb,SO2,Benzene,HC,CO,CO2e,PM10-ex,PM2.5-ex,PN23-ex,BC-ex",
+        # Pollutants: HC, CO, NOx, NO2, CO2(rep), CO2(total), PM10-ex, PN23-ex,
+        # CH4, NHMC, Pb, SO2, N2O, NH3, Zn-ex, Zn-nx, Cd-ex, Cd-nx, PM10-nx,
+        # Benzene, Toluene, Xylene, FC, EC, PM2.5-ex, BC-ex, PM2.5-nx, BC-nx,
+        # CO2e, WE-pos, HCHO, CH3CHO, HNCO, HNO2, PM10-nx-tyre, PM10-nx-brake,
+        # PM10-nx-road, PM10-nx-resusp, PM2.5-nx-tyre, PM2.5-nx-brake,
+        # PM2.5-nx-road, PM2.5-nx-resusp, PN23-nx-brake, PN23-nx-road,
+        # PN23-nx-resusp, PN23-nx
         "pollutant": "CO2(rep),NOx,CO",
         "emcat": emcat,
         "hbversion_int": "501006",
@@ -203,18 +218,19 @@ def request_hbefa(emcat="hot", yearref="2024", agglevel_ts="aggregate_ts"):
         # 10251: T+25°C, tØ, dØ
         #
         # --- Full pattern: fixed temp + parking time + trip length ---
-        # IDs 11XXX: pattern temperature, selected parking time and trip length
-        # Naming: T{temp}°C, {parking_bin}, {trip_bin}
-        # Temperature bins: -10, 0, +10, +20°C
-        # Parking time bins: 0-1h, 1-2h, 2-3h, 3-4h, 4-5h, >12h
-        # Trip length bins:  0-1km, 1-2km, 2-3km, 3-4km, 4-5km, >5km
+        # IDs 11XXX: combination of temperature, parking time bin, and trip length bin
+        # Format: 11 {temp_idx} {parking_idx} {trip_idx}
+        #
+        # Temperature index:  3=+20°C, 5=+10°C, 7=0°C, 9=-10°C
+        # Parking time index: 1=0-1h, 2=1-2h, 3=2-3h, 4=3-4h, 5=4-5h, 9=>12h
+        # Trip length index:  1=0-1km, 2=1-2km, 3=2-3km, 4=3-4km, 5=4-5km, 9=>5km (or N/A)
         #
         # Examples:
-        # 11311: T+20°C, 0-1h,  0-1km
-        # 11711: T+0°C,  0-1h,  0-1km
-        # 11911: T-10°C, 0-1h,  0-1km
-        # IDs ending in 9 (e.g. 11319, 11329) = Ø trip length for that parking bin
-        # IDs ending in 99 (e.g. 11399, 11999) = >12h parking, >5km trip (max bin)
+        # 11311: temp_idx=3 (+20°C), parking_idx=1 (0-1h),  trip_idx=1 (0-1km)
+        # 11711: temp_idx=7 (  0°C), parking_idx=1 (0-1h),  trip_idx=1 (0-1km)
+        # 11911: temp_idx=9 (-10°C), parking_idx=1 (0-1h),  trip_idx=1 (0-1km)
+        # 11319: temp_idx=3 (+20°C), parking_idx=1 (0-1h),  trip_idx=9 (N/A or >5km)
+        # 11999: temp_idx=9 (-10°C), parking_idx=9 (>12h),  trip_idx=9 (>5km)
         "idpatternambientcond": "9901,9951,10001,10051,10101,10151,10201,10251", # Ambient conditions: 8 temperature levels from -10°C to +25°C (in 5°C steps),each with average parking time and average trip length (tØ/dØ)
     }
 

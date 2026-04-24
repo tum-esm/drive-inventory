@@ -31,8 +31,10 @@ def request_hbefa(emcat="hot", yearref="2024", agglevel_ts="aggregate_ts"):
         return
 
     # Load credentials from .env file
-    mail = dotenv_values(".env").get("HBEFA_EMAIL")
-    password = dotenv_values(".env").get("HBEFA_PASSWORD")
+    mail = dotenv_values(data_paths.ENV_PATH).get("HBEFA_EMAIL")
+    password = dotenv_values(data_paths.ENV_PATH).get("HBEFA_PASSWORD")
+    print("Loaded credentials for:", mail)
+    print("Password length:", len(password) if password else "No password found")
     BASE_URL = "https://hbefa-server-repo.azurewebsites.net"
     session = requests.Session()
     get_response = session.get(f"{BASE_URL}/login")

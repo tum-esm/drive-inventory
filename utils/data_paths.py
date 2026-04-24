@@ -35,3 +35,6 @@ EF_COLD = abs_path + "/data/restricted_input/hbefa/EFA_ColdStart_hbefa.txt"
 INVENTORY_PATH = abs_path + "/data/inventory/"
 # timeprofile output folder
 TIMEPROFILE_PATH = abs_path + "/data/inventory/timeprofile/"
+
+# path to env file
+ENV_PATH = abs_path + "/utils/.env"

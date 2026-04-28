@@ -2,28 +2,28 @@
 temperature and hourly activity profiles. 
 """
     
-__version__ = 0.2
+__version__ = 0.3
 __author__ = "Daniel Kühbacher"
 
 import pandas as pd
 from typing import Literal
 
 import data_paths
-import hbefa_requests as hbefa_requests
 
 class HbefaColdEmissions: 
     """Class to calculate cold start emissions based on HBEFA emission factors.
     """
     
-    _vehicle_classes = ['PC', 'LCV'] #no further classes available in HBEFA
+    #TODO:Check which vehicle classes are available in HBEFA 5.1 for cold start emissions
+    _vehicle_classes = ['PC', 'LCV'] 
     
-    _all_components = ['NOx', 'FC', 'FC_MJ', 'PM', 'PN', 'CO2(rep)', 'CO2(total)',
-                       'NO2', 'CH4', 'NMHC', 'Pb', 'SO2', 'Benzene', 'PM2.5',
-                       'BC (exhaust)', 'HC', 'CO', 'CO2e']
+    #TODO: Check which components are available in HBEFA 5.1 for cold start emissions
+    _all_components = ['CO', 'NOx','NO2', 'CH4', 'CO2(rep)', 'CO2(total)',
+                       'PM10-ex','BC-ex', 'PM2.5-ex']
     
     _temperature_range = [-10, -5, 0, 5, 10, 15, 20, 25]
     
-    
+    #TODO: Initialize for specific year, vehicle class and components. Check if emission factors are available for the selected parameters.
     def __init__(self, 
                  components : list = ['CO2(rep)', 'NOx', 'CO']):
         """Load cold start emission factors from HBEFA excel file.
@@ -33,8 +33,8 @@ class HbefaColdEmissions:
         
         self.components = components
         
-        hbefa_requests.request_hbefa(emcat="start", yearref="2024", agglevel_ts="aggregate_ts")
-        # load emission factors from file
+        #TODO: assert that the emission factors for the selected components are available in the HBEFA table
+        #TODO: Load emission factors for the correct year
         self.emission_factors = self._import_hbefa_coldstart_ef(
             data_paths.EF_PATH + "2024_start_aggregate_ts.parquet")
 
@@ -118,7 +118,7 @@ class HbefaColdEmissions:
         
         return e * vehicle_starts
 
-
+#TODO: Should we add tests here or in a separate test file?
 if __name__ == '__main__':
     """Example usage and test of the HBEFA cold start emissions class.
     """

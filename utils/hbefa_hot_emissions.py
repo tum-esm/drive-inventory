@@ -28,11 +28,10 @@ class HbefaHotEmissions:
                                   'motorcycle': 'MOT',
                                   'coach': 'BUS'}
     
+    #TODO: Check all available components in HBEFA 5.1
     # all available components in HBEFA
-    _all_components = ['NH3', 'HC', 'CO', 'NOx', 'FC', 'FC_MJ', 'PM', 'PN', 'CO2(rep)',
-                       'CO2(total)', 'NO2', 'CH4', 'NMHC', 'Pb', 'SO2', 'N2O',
-                       'PM (non-exhaust)', 'Benzene', 'PM2.5', 'BC (exhaust)',
-                       'PM2.5 (non-exhaust)', 'BC (non-exhaust)', 'CO2e']
+    _all_components =['CO', 'NOx','NO2', 'CH4', 'CO2(rep)', 'CO2(total)',
+              'PM10-ex', 'PM10-nx', 'BC-ex', 'BC-nx', 'PM2.5-ex', 'PM2.5-nx']
     
     # thresholds acquired from different sources and expert assessments
     # the values are optimized for Munichs urban traffic basend 
@@ -99,22 +98,25 @@ class HbefaHotEmissions:
         self.area_type = area_type
         self._vcr_thresholds = HbefaHotEmissions.default_vcr_thresholds
     
+        #TODO: load emission factors for correct year and store them in a dict
         # load emission factors with explicit traffic situations
-        hbefa_requests.request_hbefa(emcat="hot", yearref="2024", agglevel_ts="single_ts")
         self.ef_dict = self._import_hbefa_ef(data_paths.EF_PATH  + "2024_hot_single_ts.parquet", 
                                             columns_to_keep = ['Year', 'Component', 
                                                                'VehCat', 'TrafficSit',
                                                                'Gradient', 'EFA_weighted'], 
                                             index_cols = ['Year', 'TrafficSit','VehCat',
                                                           'Gradient','Component'])
+        
+        #TODO: only load aggregated emission factors if they are needed for the calculation
         # load emission factors with aggregated traffic situations
-        hbefa_requests.request_hbefa(emcat="hot", yearref="2024", agglevel_ts="aggregate_ts")
         self.ef_aggregated = self._import_hbefa_ef(data_paths.EF_PATH  + "2024_hot_aggregate_ts.parquet",
                                                 columns_to_keep= ['Year', 'Component',
                                                                   'VehCat', 'RoadCat',
                                                                   'EFA_weighted'],
                                                 index_cols = ['Year', 'RoadCat',
                                                               'VehCat','Component'])
+        
+        #TODO: assert emission factors that are required for the calculation
     
     
     @property

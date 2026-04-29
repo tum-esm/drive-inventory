@@ -21,6 +21,7 @@ class HbefaColdEmissions:
                                   'HGV' : 'HGV',
                                   'coach': 'BUS'}
     
+    # all available components in HBEFA
     _all_components = ['HC', 'CO', 'NOx', 'NO2', 'CO2(rep)', 'CO2(total)', 'PM10-ex', 'PN23-ex',
         'CH4', 'NHMC', 'Pb', 'SO2', 'N2O', 'NH3', 'Zn-ex', 'Zn-nx', 'Cd-ex', 'Cd-nx', 'PM10-nx',
         'Benzene', 'Toluene', 'Xylene', 'FC', 'EC', 'PM2.5-ex', 'BC-ex', 'PM2.5-nx', 'BC-nx',

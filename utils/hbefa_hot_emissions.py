@@ -28,7 +28,6 @@ class HbefaHotEmissions:
                                   'motorcycle': 'MOT',
                                   'coach': 'BUS'}
     
-    #TODO: Check all available components in HBEFA 5.1
     # all available components in HBEFA
     _all_components = ['HC', 'CO', 'NOx', 'NO2', 'CO2(rep)', 'CO2(total)', 'PM10-ex', 'PN23-ex',
         'CH4', 'NHMC', 'Pb', 'SO2', 'N2O', 'NH3', 'Zn-ex', 'Zn-nx', 'Cd-ex', 'Cd-nx', 'PM10-nx',

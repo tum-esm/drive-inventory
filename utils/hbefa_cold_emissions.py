@@ -14,8 +14,12 @@ class HbefaColdEmissions:
     """Class to calculate cold start emissions based on HBEFA emission factors.
     """
     
-    #TODO:Check which vehicle classes are available in HBEFA 5.1 for cold start emissions
-    _vehicle_classes = ['PC', 'LCV'] 
+    _vehicle_classes = ['PC', 'LCV', 'HGV', 'BUS'] 
+    
+    _hbefa_raw_vehicle_classes = {'pass. car' : 'PC',
+                                  'LCV': 'LCV',
+                                  'HGV' : 'HGV',
+                                  'coach': 'BUS'}
     
     #TODO: Check which components are available in HBEFA 5.1 for cold start emissions
     _all_components = ['CO', 'NOx', 'NO2', 'CO2(rep)', 'CO2(total)', 'PM10-ex', 'CH4',
@@ -57,7 +61,7 @@ class HbefaColdEmissions:
                                'Ambient cond. pattern': 'AmbientCondPattern', 'EFA': 'EFA_weighted'}, inplace=True)
             
             # convert Vehicle Categorie to common acronym
-            ef.loc[ef['VehCat']=='pass. car', 'VehCat'] = 'PC'
+            ef['VehCat']= ef['VehCat'].map(HbefaColdEmissions._hbefa_raw_vehicle_classes)
             ef = ef.set_index(['VehCat', 'Year','Component', 'AmbientCondPattern'])
             print(f'Loaded emission factors from {filepath}')
             return ef
@@ -97,7 +101,7 @@ class HbefaColdEmissions:
     def calculate_emission_hourly(self,
                                   vehicle_starts : int,
                                   hourly_temperature: float,
-                                  vehicle_class: Literal['PC', 'LCV'],
+                                  vehicle_class: Literal['PC', 'LCV', 'HGV', 'Bus'],
                                   year: int) -> float:
         """Calculates the daily cold start emission based on ambient condition pattern
 

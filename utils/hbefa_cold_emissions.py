@@ -32,20 +32,22 @@ class HbefaColdEmissions:
     
     _temperature_range = [-10, -5, 0, 5, 10, 15, 20, 25]
     
-    #TODO: Initialize for specific year, vehicle class and components. Check if emission factors are available for the selected parameters.
     def __init__(self, 
-                 components : list = ['CO2(rep)', 'NOx', 'CO']):
+                 components : list = ['CO2(rep)', 'NOx', 'CO'],
+                 vehicle_classes : list = _vehicle_classes,
+                 year: str = '2024'):
         """Load cold start emission factors from HBEFA excel file.
         Initilize for specific components.
         """
         assert all([c in HbefaColdEmissions._all_components for c in components])
         
         self.components = components
-        
-        #TODO: assert that the emission factors for the selected components are available in the HBEFA table
-        #TODO: Load emission factors for the correct year
+        self._vehicle_classes = vehicle_classes
+        self.year = year
+
         self.emission_factors = self._import_hbefa_coldstart_ef(
-            data_paths.EF_PATH + "2024_start_aggregate_ts.parquet")
+            data_paths.EF_PATH + f"{year}_start_aggregate_ts.parquet")
+        assert all([c in self.emission_factors.index.get_level_values('Component') for c in components])
 
 
     def _import_hbefa_coldstart_ef(self,
@@ -106,7 +108,7 @@ class HbefaColdEmissions:
     def calculate_emission_hourly(self,
                                   vehicle_starts : int,
                                   hourly_temperature: float,
-                                  vehicle_class: Literal['PC', 'LCV', 'HGV', 'Bus'],
+                                  vehicle_class: Literal['PC', 'LCV', 'HGV', 'BUS'],
                                   year: int) -> float:
         """Calculates the daily cold start emission based on ambient condition pattern
 

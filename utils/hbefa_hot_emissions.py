@@ -30,8 +30,13 @@ class HbefaHotEmissions:
     
     #TODO: Check all available components in HBEFA 5.1
     # all available components in HBEFA
-    _all_components =['CO', 'NOx','NO2', 'CH4', 'CO2(rep)', 'CO2(total)',
-              'PM10-ex', 'PM10-nx', 'BC-ex', 'BC-nx', 'PM2.5-ex', 'PM2.5-nx']
+    _all_components = ['HC', 'CO', 'NOx', 'NO2', 'CO2(rep)', 'CO2(total)', 'PM10-ex', 'PN23-ex',
+        'CH4', 'NHMC', 'Pb', 'SO2', 'N2O', 'NH3', 'Zn-ex', 'Zn-nx', 'Cd-ex', 'Cd-nx', 'PM10-nx',
+        'Benzene', 'Toluene', 'Xylene', 'FC', 'EC', 'PM2.5-ex', 'BC-ex', 'PM2.5-nx', 'BC-nx',
+        'CO2e', 'WE-pos', 'HCHO', 'CH3CHO', 'HNCO', 'HNO2', 'PM10-nx-tyre', 'PM10-nx-brake',
+        'PM10-nx-road', 'PM10-nx-resusp', 'PM2.5-nx-tyre', 'PM2.5-nx-brake',
+        'PM2.5-nx-road', 'PM2.5-nx-resusp', 'PN23-nx-brake', 'PN23-nx-road,',
+        'PN23-nx-resusp', 'PN23-nx']
     
     # thresholds acquired from different sources and expert assessments
     # the values are optimized for Munichs urban traffic basend 

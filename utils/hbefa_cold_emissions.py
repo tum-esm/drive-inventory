@@ -21,9 +21,13 @@ class HbefaColdEmissions:
                                   'HGV' : 'HGV',
                                   'coach': 'BUS'}
     
-    #TODO: Check which components are available in HBEFA 5.1 for cold start emissions
-    _all_components = ['CO', 'NOx', 'NO2', 'CO2(rep)', 'CO2(total)', 'PM10-ex', 'CH4',
-                       'PM10-nx', 'PM2.5-ex', 'BC-ex', 'PM2.5-nx', 'BC-nx']
+    _all_components = ['HC', 'CO', 'NOx', 'NO2', 'CO2(rep)', 'CO2(total)', 'PM10-ex', 'PN23-ex',
+        'CH4', 'NHMC', 'Pb', 'SO2', 'N2O', 'NH3', 'Zn-ex', 'Zn-nx', 'Cd-ex', 'Cd-nx', 'PM10-nx',
+        'Benzene', 'Toluene', 'Xylene', 'FC', 'EC', 'PM2.5-ex', 'BC-ex', 'PM2.5-nx', 'BC-nx',
+        'CO2e', 'WE-pos', 'HCHO', 'CH3CHO', 'HNCO', 'HNO2', 'PM10-nx-tyre', 'PM10-nx-brake',
+        'PM10-nx-road', 'PM10-nx-resusp', 'PM2.5-nx-tyre', 'PM2.5-nx-brake',
+        'PM2.5-nx-road', 'PM2.5-nx-resusp', 'PN23-nx-brake', 'PN23-nx-road,',
+        'PN23-nx-resusp', 'PN23-nx']
     
     _temperature_range = [-10, -5, 0, 5, 10, 15, 20, 25]
     

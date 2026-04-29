@@ -18,8 +18,8 @@ class HbefaColdEmissions:
     _vehicle_classes = ['PC', 'LCV'] 
     
     #TODO: Check which components are available in HBEFA 5.1 for cold start emissions
-    _all_components = ['CO', 'NOx','NO2', 'CH4', 'CO2(rep)', 'CO2(total)',
-                       'PM10-ex','BC-ex', 'PM2.5-ex']
+    _all_components = ['CO', 'NOx', 'NO2', 'CO2(rep)', 'CO2(total)', 'PM10-ex', 'CH4',
+                       'PM10-nx', 'PM2.5-ex', 'BC-ex', 'PM2.5-nx', 'BC-nx']
     
     _temperature_range = [-10, -5, 0, 5, 10, 15, 20, 25]
     
@@ -60,7 +60,6 @@ class HbefaColdEmissions:
             ef.loc[ef['VehCat']=='pass. car', 'VehCat'] = 'PC'
             ef = ef.set_index(['VehCat', 'Year','Component', 'AmbientCondPattern'])
             print(f'Loaded emission factors from {filepath}')
-            ef.to_parquet(data_paths.EF_PATH + "test.parquet") # save a copy of the emission factors in parquet format for faster loading in the future
             return ef
     
         except Exception as e:

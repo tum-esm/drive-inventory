@@ -47,7 +47,7 @@ class HbefaColdEmissions:
 
         self.emission_factors = self._import_hbefa_coldstart_ef(
             data_paths.EF_PATH + f"{year}_start_aggregate_ts.parquet")
-        assert all([c in self.emission_factors.index.get_level_values('Component') for c in components])
+        assert all([c in self.emission_factors.index.get_level_values('Component') for c in components]), "Not all components are available in the emission factor table. Please check the available components and adjust your selection accordingly."
 
 
     def _import_hbefa_coldstart_ef(self,

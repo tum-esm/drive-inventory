@@ -81,7 +81,8 @@ class HbefaHotEmissions:
                  vehicle_classes : list = ['PC', 'LCV', 'HGV'], 
                  ef_type : Literal['EFA_weighted', 'EFA_WTT_weighted',
                                    'EFA_WTW_weighted'] = 'EFA_weighted',
-                 area_type: Literal['Urban', 'Motorway', 'Rural'] = 'Urban'):
+                 area_type: Literal['Urban', 'Motorway', 'Rural'] = 'Urban',
+                 year: str = '2024'):
         """Imports emission factors from HBEFA-exported *.txt files and initializes 
         the class.
 
@@ -101,27 +102,23 @@ class HbefaHotEmissions:
         self.ef_type = ef_type
         self.area_type = area_type
         self._vcr_thresholds = HbefaHotEmissions.default_vcr_thresholds
-    
-        #TODO: load emission factors for correct year and store them in a dict
+        self.year = year
+
         # load emission factors with explicit traffic situations
-        self.ef_dict = self._import_hbefa_ef(data_paths.EF_PATH  + "2024_hot_single_ts.parquet", 
+        self.ef_dict = self._import_hbefa_ef(data_paths.EF_PATH  + f"{year}_hot_single_ts.parquet", 
                                             columns_to_keep = ['Year', 'Component', 
                                                                'VehCat', 'TrafficSit',
                                                                'Gradient', 'EFA_weighted'], 
                                             index_cols = ['Year', 'TrafficSit','VehCat',
                                                           'Gradient','Component'])
-        
         #TODO: only load aggregated emission factors if they are needed for the calculation
         # load emission factors with aggregated traffic situations
-        self.ef_aggregated = self._import_hbefa_ef(data_paths.EF_PATH  + "2024_hot_aggregate_ts.parquet",
+        self.ef_aggregated = self._import_hbefa_ef(data_paths.EF_PATH  + f"{year}_hot_aggregate_ts.parquet",
                                                 columns_to_keep= ['Year', 'Component',
                                                                   'VehCat', 'RoadCat',
                                                                   'EFA_weighted'],
                                                 index_cols = ['Year', 'RoadCat',
                                                               'VehCat','Component'])
-        
-        #TODO: assert emission factors that are required for the calculation
-    
     
     @property
     def vcr_thresholds(self): 
@@ -152,6 +149,8 @@ class HbefaHotEmissions:
                                'Ambient cond. pattern': 'AmbientCondPattern', 'EFA': 'EFA_weighted', 'Traffic situation': 'TrafficSit', 'Road category': 'RoadCat'}, inplace=True)
             ef['VehCat']= ef['VehCat'].map(HbefaHotEmissions._hbefa_raw_vehicle_classes)
             ef= ef[columns_to_keep].set_index(index_cols) # reduce to useful columns
+            assert all([c in ef.index.get_level_values('Component') for c in self.components]), \
+            "Not all components are available in the emission factor table."
             ef_dict= ef.to_dict() # convert to dict for faster access
             print(f'Loaded emission factors from {filepath}')
             return ef_dict

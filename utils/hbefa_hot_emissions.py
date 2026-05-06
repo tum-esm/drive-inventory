@@ -12,7 +12,8 @@ import numpy as np
 from typing import Literal
 
 from traffic_counts import TrafficCounts
-import data_paths  
+import data_paths 
+import hbefa_requests
 
 class HbefaHotEmissions:
     """Defines HBEFA parameters and classes, imports emission factors and 
@@ -28,10 +29,13 @@ class HbefaHotEmissions:
                                   'coach': 'BUS'}
     
     # all available components in HBEFA
-    _all_components = ['NH3', 'HC', 'CO', 'NOx', 'FC', 'FC_MJ', 'PM', 'PN', 'CO2(rep)',
-                       'CO2(total)', 'NO2', 'CH4', 'NMHC', 'Pb', 'SO2', 'N2O',
-                       'PM (non-exhaust)', 'Benzene', 'PM2.5', 'BC (exhaust)',
-                       'PM2.5 (non-exhaust)', 'BC (non-exhaust)', 'CO2e']
+    _all_components = ['HC', 'CO', 'NOx', 'NO2', 'CO2(rep)', 'CO2(total)', 'PM10-ex', 'PN23-ex',
+        'CH4', 'NHMC', 'Pb', 'SO2', 'N2O', 'NH3', 'Zn-ex', 'Zn-nx', 'Cd-ex', 'Cd-nx', 'PM10-nx',
+        'Benzene', 'Toluene', 'Xylene', 'FC', 'EC', 'PM2.5-ex', 'BC-ex', 'PM2.5-nx', 'BC-nx',
+        'CO2e', 'WE-pos', 'HCHO', 'CH3CHO', 'HNCO', 'HNO2', 'PM10-nx-tyre', 'PM10-nx-brake',
+        'PM10-nx-road', 'PM10-nx-resusp', 'PM2.5-nx-tyre', 'PM2.5-nx-brake',
+        'PM2.5-nx-road', 'PM2.5-nx-resusp', 'PN23-nx-brake', 'PN23-nx-road,',
+        'PN23-nx-resusp', 'PN23-nx']
     
     # thresholds acquired from different sources and expert assessments
     # the values are optimized for Munichs urban traffic basend 
@@ -77,7 +81,8 @@ class HbefaHotEmissions:
                  vehicle_classes : list = ['PC', 'LCV', 'HGV'], 
                  ef_type : Literal['EFA_weighted', 'EFA_WTT_weighted',
                                    'EFA_WTW_weighted'] = 'EFA_weighted',
-                 area_type: Literal['Urban', 'Motorway', 'Rural'] = 'Urban'):
+                 area_type: Literal['Urban', 'Motorway', 'Rural'] = 'Urban',
+                 year: str = '2024'):
         """Imports emission factors from HBEFA-exported *.txt files and initializes 
         the class.
 
@@ -97,26 +102,23 @@ class HbefaHotEmissions:
         self.ef_type = ef_type
         self.area_type = area_type
         self._vcr_thresholds = HbefaHotEmissions.default_vcr_thresholds
-    
+        self.year = year
+
         # load emission factors with explicit traffic situations
-        self.ef_dict = self._import_hbefa_ef(data_paths.EF_TS, 
+        self.ef_dict = self._import_hbefa_ef(data_paths.EF_PATH  + f"{year}_hot_single_ts.parquet", 
                                             columns_to_keep = ['Year', 'Component', 
                                                                'VehCat', 'TrafficSit',
-                                                               'Gradient', 'EFA_weighted',
-                                                               'EFA_WTT_weighted', 
-                                                               'EFA_WTW_weighted'], 
+                                                               'Gradient', 'EFA_weighted'], 
                                             index_cols = ['Year', 'TrafficSit','VehCat',
                                                           'Gradient','Component'])
+        #TODO: only load aggregated emission factors if they are needed for the calculation
         # load emission factors with aggregated traffic situations
-        self.ef_aggregated = self._import_hbefa_ef(data_paths.EF_AGG,
+        self.ef_aggregated = self._import_hbefa_ef(data_paths.EF_PATH  + f"{year}_hot_aggregate_ts.parquet",
                                                 columns_to_keep= ['Year', 'Component',
                                                                   'VehCat', 'RoadCat',
-                                                                  'EFA_weighted',
-                                                                  'EFA_WTT_weighted', 
-                                                                  'EFA_WTW_weighted'],
+                                                                  'EFA_weighted'],
                                                 index_cols = ['Year', 'RoadCat',
                                                               'VehCat','Component'])
-    
     
     @property
     def vcr_thresholds(self): 
@@ -142,12 +144,13 @@ class HbefaHotEmissions:
             dict: emission factors
         """
         try:
-            ef = pd.read_csv(filepath, sep=';', encoding='latin_1',
-                             on_bad_lines= 'skip', decimal=',', 
-                             dtype={'AmbientCondPattern': str}) 
-            
+            ef = pd.read_parquet(filepath) 
+            ef.rename(columns={'Vehicle category': 'VehCat', 'Reference year': 'Year', 'Pollutant': 'Component',
+                               'Ambient cond. pattern': 'AmbientCondPattern', 'EFA': 'EFA_weighted', 'Traffic situation': 'TrafficSit', 'Road category': 'RoadCat'}, inplace=True)
             ef['VehCat']= ef['VehCat'].map(HbefaHotEmissions._hbefa_raw_vehicle_classes)
             ef= ef[columns_to_keep].set_index(index_cols) # reduce to useful columns
+            assert all([c in ef.index.get_level_values('Component') for c in self.components]), \
+            "Not all components are available in the emission factor table."
             ef_dict= ef.to_dict() # convert to dict for faster access
             print(f'Loaded emission factors from {filepath}')
             return ef_dict
@@ -386,7 +389,7 @@ if __name__ == '__main__':
     cycles = TrafficCounts(init_timeprofile=False)
     diurnal_cycles = cycles.get_hourly_scaling_factors(date='2019-03-23')
     
-    t = HbefaHotEmissions(components = ['NH3'],
+    t = HbefaHotEmissions(components = ['CO2(rep)', 'NOx', 'CO'],
                           vehicle_classes= ['PC'],
                           ef_type='EFA_weighted'
                           )
@@ -399,6 +402,6 @@ if __name__ == '__main__':
         road_type = 'Distributor/Secondary',
         hbefa_speed = 70,
         hbefa_gradient = '0%',
-        year = 2019)
+        year = 2024)
     
     print(emissions) 

@@ -5,7 +5,9 @@ import pathlib
 abs_path = str(pathlib.Path(__file__).parent.parent.resolve())
 
 #INPUT DATA
+DATA_PATH = abs_path + "/data/"
 #auxiliary_data
+BAST_LOCATIONS_FILE = abs_path + "/data/auxiliary/bast_locations_selected.gpkg"
 CALENDER_FILE = abs_path + "/data/auxiliary/calender_18to26.xlsx"
 MUNICH_BOARDERS_FILE = abs_path + "/data/geodata/munich_boarders.gpkg"
 # extended boarders including the surrounding motorway
@@ -35,3 +37,6 @@ EF_COLD = abs_path + "/data/restricted_input/hbefa/EFA_ColdStart_hbefa.txt"
 INVENTORY_PATH = abs_path + "/data/inventory/"
 # timeprofile output folder
 TIMEPROFILE_PATH = abs_path + "/data/inventory/timeprofile/"
+
+# path to env file
+ENV_PATH = abs_path + "/utils/.env"

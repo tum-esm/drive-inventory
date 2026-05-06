@@ -2,7 +2,7 @@
 temperature and hourly activity profiles. 
 """
     
-__version__ = 0.2
+__version__ = 0.3
 __author__ = "Daniel Kühbacher"
 
 import pandas as pd
@@ -14,27 +14,40 @@ class HbefaColdEmissions:
     """Class to calculate cold start emissions based on HBEFA emission factors.
     """
     
-    _vehicle_classes = ['PC', 'LCV'] #no further classes available in HBEFA
+    _vehicle_classes = ['PC', 'LCV', 'HGV', 'BUS'] 
     
-    _all_components = ['NOx', 'FC', 'FC_MJ', 'PM', 'PN', 'CO2(rep)', 'CO2(total)',
-                       'NO2', 'CH4', 'NMHC', 'Pb', 'SO2', 'Benzene', 'PM2.5',
-                       'BC (exhaust)', 'HC', 'CO', 'CO2e']
+    _hbefa_raw_vehicle_classes = {'pass. car' : 'PC',
+                                  'LCV': 'LCV',
+                                  'HGV' : 'HGV',
+                                  'coach': 'BUS'}
+    
+    # all available components in HBEFA
+    _all_components = ['HC', 'CO', 'NOx', 'NO2', 'CO2(rep)', 'CO2(total)', 'PM10-ex', 'PN23-ex',
+        'CH4', 'NHMC', 'Pb', 'SO2', 'N2O', 'NH3', 'Zn-ex', 'Zn-nx', 'Cd-ex', 'Cd-nx', 'PM10-nx',
+        'Benzene', 'Toluene', 'Xylene', 'FC', 'EC', 'PM2.5-ex', 'BC-ex', 'PM2.5-nx', 'BC-nx',
+        'CO2e', 'WE-pos', 'HCHO', 'CH3CHO', 'HNCO', 'HNO2', 'PM10-nx-tyre', 'PM10-nx-brake',
+        'PM10-nx-road', 'PM10-nx-resusp', 'PM2.5-nx-tyre', 'PM2.5-nx-brake',
+        'PM2.5-nx-road', 'PM2.5-nx-resusp', 'PN23-nx-brake', 'PN23-nx-road,',
+        'PN23-nx-resusp', 'PN23-nx']
     
     _temperature_range = [-10, -5, 0, 5, 10, 15, 20, 25]
     
-    
     def __init__(self, 
-                 components : list = ['CO2(rep)', 'NOx', 'CO']):
+                 components : list = ['CO2(rep)', 'NOx', 'CO'],
+                 vehicle_classes : list = _vehicle_classes,
+                 year: str = '2024'):
         """Load cold start emission factors from HBEFA excel file.
         Initilize for specific components.
         """
         assert all([c in HbefaColdEmissions._all_components for c in components])
         
         self.components = components
-        
-        # load emission factors from file
+        self._vehicle_classes = vehicle_classes
+        self.year = year
+
         self.emission_factors = self._import_hbefa_coldstart_ef(
-            data_paths.EF_COLD)
+            data_paths.EF_PATH + f"{year}_start_aggregate_ts.parquet")
+        assert all([c in self.emission_factors.index.get_level_values('Component') for c in components]), "Not all components are available in the emission factor table. Please check the available components and adjust your selection accordingly."
 
 
     def _import_hbefa_coldstart_ef(self,
@@ -47,17 +60,15 @@ class HbefaColdEmissions:
         Returns:
             dict: emission factors
         """
+        #TODO : Check if EFA is already weighted.
         try:
+            ef = pd.read_parquet(filepath, columns= ['Vehicle category', 'Reference year', 'Pollutant',
+                                'Ambient cond. pattern', 'EFA'])
+            ef.rename(columns={'Vehicle category': 'VehCat', 'Reference year': 'Year', 'Pollutant': 'Component',
+                               'Ambient cond. pattern': 'AmbientCondPattern', 'EFA': 'EFA_weighted'}, inplace=True)
             
-            ef = pd.read_csv(filepath, sep=';', encoding='latin_1',
-                on_bad_lines= 'skip', decimal=',')
-
-            columns_to_keep = ['VehCat', 'Year', 'Component',
-                                'AmbientCondPattern', 'EFA_weighted']
-
             # convert Vehicle Categorie to common acronym
-            ef.loc[ef['VehCat']=='pass. car', 'VehCat'] = 'PC'
-            ef = ef[columns_to_keep] # reduce to interesting columns
+            ef['VehCat']= ef['VehCat'].map(HbefaColdEmissions._hbefa_raw_vehicle_classes)
             ef = ef.set_index(['VehCat', 'Year','Component', 'AmbientCondPattern'])
             print(f'Loaded emission factors from {filepath}')
             return ef
@@ -97,7 +108,7 @@ class HbefaColdEmissions:
     def calculate_emission_hourly(self,
                                   vehicle_starts : int,
                                   hourly_temperature: float,
-                                  vehicle_class: Literal['PC', 'LCV'],
+                                  vehicle_class: Literal['PC', 'LCV', 'HGV', 'BUS'],
                                   year: int) -> float:
         """Calculates the daily cold start emission based on ambient condition pattern
 
@@ -117,7 +128,7 @@ class HbefaColdEmissions:
         
         return e * vehicle_starts
 
-
+#TODO: Should we add tests here or in a separate test file?
 if __name__ == '__main__':
     """Example usage and test of the HBEFA cold start emissions class.
     """
@@ -128,6 +139,6 @@ if __name__ == '__main__':
     k = c.calculate_emission_hourly(vehicle_starts = 10,
                                     hourly_temperature = temperature,
                                     vehicle_class = 'PC',
-                                    year = 2019)
+                                    year = 2024)
     
     print(k)

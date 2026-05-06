@@ -14,7 +14,7 @@ from dateutil.parser import parse
 class Calendar:
     
     def __init__(self,
-                 years:list = [2018, 2019, 2020, 2021, 2022, 2023, 2024]) -> None:
+                 years:list = [2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026]) -> None:
         """Initializes the calender object and loads from calender file
 
         Args:

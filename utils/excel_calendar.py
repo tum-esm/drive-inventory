@@ -7,7 +7,7 @@ __author__ = 'Daniel Kühbacher'
 
 import pandas as pd
 
-import data_paths
+from utils import data_paths
 from dateutil.parser import parse
 
 

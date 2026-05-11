@@ -11,8 +11,8 @@ import numpy as np
 from itertools import product
 from datetime import datetime
 
-import data_paths
-import excel_calendar
+from utils import data_paths
+from utils import excel_calendar
 
 
 class TrafficCounts:

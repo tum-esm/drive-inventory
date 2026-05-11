@@ -3,6 +3,11 @@ from unittest import case
 import PySimpleGUI as sg
 from preprocessing import preprocess_bast_locations
 from preprocessing import preprocess_mst_locations
+from preprocessing import preprocess_2025_visum_model
+from preprocessing import preprocess_mst_counting_data
+from preprocessing import combine_preprocessed_files
+from preprocessing import preprocess_bast_counting_data
+
 from enum import Enum
 
 #States of the GUI
@@ -36,7 +41,8 @@ main_menu_col = sg.Column(
 preprocess_col = sg.Column(
     [
         [sg.Text("Preprocessing", key="pp_text")],
-        [sg.Button("START", key="pp_start")]
+        [sg.Button("START", key="pp_start")],
+        [sg.ProgressBar(6, key='pp_progress_bar', visible=False)]
     ],
     key="preprocess_col",
     visible=False
@@ -93,15 +99,47 @@ def preprocess_screen():
         if event == sg.WIN_CLOSED:
             return
         if event == "pp_start":
+            count = 0
             window["pp_text"].update("Preprocessing in progress...")
+            window["pp_progress_bar"].update(visible=True)
+
             if(preprocess_bast_locations.run()):
-                sg.popup("Preprocessing BAST completed successfully!")
+                count += 1
+                window["pp_progress_bar"].update(current_count=count)
             else:
                 sg.popup("Preprocessing BAST failed!")
+
             if(preprocess_mst_locations.run()):
-                sg.popup("Preprocessing MST completed successfully!")
+                count += 1
+                window["pp_progress_bar"].update(current_count=count)
             else:
                 sg.popup("Preprocessing MST failed!")
+            
+            if(preprocess_bast_counting_data.run()):
+                count += 1
+                window["pp_progress_bar"].update(current_count=count)
+            else:
+                sg.popup("Preprocessing BAST counting data failed")
+
+            if(preprocess_mst_counting_data.run()):
+                count += 1
+                window["pp_progress_bar"].update(current_count=count)
+            else:
+                sg.popup("Preprocessing MST counting data failed")
+
+            if(preprocess_2025_visum_model.run()):
+                count += 1
+                window["pp_progress_bar"].update(current_count=count)
+            else:
+                sg.popup("Preprocessing Visum model failed")
+
+            if(combine_preprocessed_files.run()):
+                count += 1
+                window["pp_progress_bar"].update(current_count=count)
+            else:
+                sg.popup("Combining preprocessed files failed")
+            sg.popup("Preprocessing completed!")
+
 
     window["preprocess_col"].update(visible=False)
 

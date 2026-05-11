@@ -18,7 +18,7 @@ class State(Enum):
     DATA_REQ = 2
     PREPROCESS = 3
 
-# Definiition of the different columns for the different screens of the GUI
+# Definition of the different columns for the different screens of the GUI
 start_col = sg.Column(
     [
         [sg.Text("Data-driven Road-Transport Inventory for Vehicle Emissions", key="title")],
@@ -31,11 +31,23 @@ start_col = sg.Column(
 main_menu_col = sg.Column(
     [
         [sg.Text("Main Menu", key="main_menu_title")],
-        [sg.Text("1. Data Requirements", key="main_menu_data_req")],
+        [sg.Text("1. Data Requirements", key="main_menu_data_req"), sg.Button("Go", key="mm_data_req")],
         [sg.Text("2. Data Preprocessing", key="main_menu_data_preprocess"), sg.Button("Go", key="mm_preprocess")],
         [sg.Button("Exit", key="main_menu_exit")]
     ],
     key="main_menu_col",
+    visible=False
+)
+
+data_req_col = sg.Column(
+    [
+        [sg.Text("Data Requirements:", key="dr_text")],
+        [sg.Text("Restricted Input"), sg.Button("Check", key="dr_ri")],
+        [sg.Text("Auxiliary Data"), sg.Button("Check", key="dr_ad")],
+        [sg.Text("Geodata"), sg.Button("Check", key="dr_gd")],
+        [sg.Button("Return to main menu", key='dr_return')]
+    ],
+    key="data_req_col",
     visible=False
 )
 
@@ -44,12 +56,13 @@ preprocess_col = sg.Column(
         [sg.Text("Preprocessing", key="pp_text")],
         [sg.Button("START", key="pp_start")],
         [sg.ProgressBar(6, key='pp_progress_bar', visible=False)],
-        [sg.Button("Return to main menue", key='pp_return')]
+        [sg.Button("Return to main menu", key='pp_return')]
     ],
     key="preprocess_col",
     visible=False
 )
-layout = [[start_col, preprocess_col, main_menu_col]]
+
+layout = [[start_col, preprocess_col, main_menu_col, data_req_col]]
 
 # Window definition
 window = sg.Window("DRIVE 1.0", layout, size=(980, 510), finalize=True, resizable=True)
@@ -72,8 +85,17 @@ def start_screen():
     return result
 
 def data_requirements_screen():
+    window["data_req_col"].update(visible=True)
     result = State.EXIT
-    return result
+    while True:
+        event, values = window.read()
+        if event == sg.WIN_CLOSED:
+            return
+        if event == "dr_return":
+            result = State.MAIN_MENU
+            break
+    window["data_req_col"].update(visible=False)
+    return result       
 
 def main_menu_screen():
     window["main_menu_col"].update(visible=True)
@@ -90,7 +112,9 @@ def main_menu_screen():
         if event == "mm_preprocess":
             result = State.PREPROCESS
             break
-
+        if event == "mm_data_req":
+            result = State.DATA_REQ
+            break
     window["main_menu_col"].update(visible=False)
     return result
 

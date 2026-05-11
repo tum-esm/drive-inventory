@@ -43,7 +43,7 @@ def run():
         # read bast location geopackaged file
         bast_loc = gpd.read_file(data_path+'bast_locations_selected.gpkg')
     except Exception as e:
-        print("Could not read bast location geopackaged file")
+        print(f"Error occurred while reading bast location geopackaged file: {e}")
         return False
 
     try:
@@ -51,7 +51,7 @@ def run():
         bast_raw = pd.read_csv(data_path+'BAST_CountingStations_daily_from2025.csv', 
                             delimiter=',', decimal = ';', encoding='ISO-8859-1', index_col =0)
     except Exception as e:
-        print("Could not read Bast counting data")
+        print(f"Error occured while reading Bast counting data: {e}")
         return False
 
     try:
@@ -182,7 +182,7 @@ def run():
         # Store the dataframe as a parquet file
         processed_bast_df.to_parquet(data_path+'preprocessed_bast_counting_data_until2024.parquet', index=False)
     except Exception as e:
-        print("Could not process bast counting data")
+        print(f"Error occurred while processing bast counting data: {e}")
         return False
     return True
 

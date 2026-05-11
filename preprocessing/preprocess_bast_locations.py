@@ -46,7 +46,7 @@ def run():
         bast_raw = pd.read_csv(data_path+'bast_locations_bavaria.csv', 
                             delimiter=';', decimal = ',', encoding='ISO-8859-1')
     except Exception as e:
-        print("Could not read raw bast location data")
+        print(f"Error occurred while reading raw bast location data: {e}")
         return False
 
     try:
@@ -122,7 +122,7 @@ def run():
         # save data
         bast.to_file(data_path + "bast_locations_cleaned.gpkg", driver="GPKG")
     except Exception as e:
-        print("Could not process bast locations")
+        print(f"Error occurred while processing bast locations: {e}")
         return False
 
     return True

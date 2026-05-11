@@ -42,12 +42,12 @@ def run():
     try:
         visum_links = gpd.read_file(visum_link_path)
     except Exception as e:
-        print("Could not load the visum links")
+        print(f"Error occurred while loading the visum links: {e}")
         return False
     try:
         visum_zones = gpd.read_file(visum_zone_path)
     except Exception as e:
-        print("Could not load the visum zones")
+        print(f"Error occurred while loading the visum zones: {e}")
         return False
 
     try:
@@ -335,7 +335,7 @@ def run():
         visum_links[links_columns_to_keep].to_file(data_paths.VISUM_2025_FOLDER_PATH+'visum_links_2025.gpkg',
                                                 driver='GPKG')
     except Exception as e:
-        print("Could not preprocess the visum model")
+        print(f"Error occurred while processing the visum model: {e}")
         return False
 
     return True

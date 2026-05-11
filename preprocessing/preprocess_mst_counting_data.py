@@ -46,7 +46,7 @@ def run():
         # read the MST Locations geo packaged file
         mst_loc = gpd.read_file(data_path+'mst_locations_selected.gpkg')
     except Exception as e:
-        print("Could not read the MST locations geo packaged file")
+        print(f"Error occurred while reading the MST locations geo packaged file: {e}")
         return False
 
     # list of file patterns to match
@@ -204,7 +204,7 @@ def run():
         # Store the dataframe as a parquet file
         mst_preprocessed.to_parquet(data_path+'preprocessed_lhm_counting_data_2025.parquet', index=False)
     except Exception as e:
-        print("Could not process the MST counting data")
+        print(f"Error occurred while processing the MST counting data: {e}")
         return False
     return True
 

@@ -282,6 +282,6 @@ def run():
         # Store the dataframe as a parquet file
         volume_processed.to_parquet(data_path+'counting_data_combined_from2025.parquet', index=False)
     except Exception as e:
-        print("Something went wrong while trying to combine the preprocessed files.")
+        print(f"Error occured during combining of preprocessed files: {e}")
         return False
     return True    

@@ -15,7 +15,8 @@ class State(Enum):
     EXIT = -1
     START = 0
     MAIN_MENU = 1
-    PREPROCESS = 2
+    DATA_REQ = 2
+    PREPROCESS = 3
 
 # Definiition of the different columns for the different screens of the GUI
 start_col = sg.Column(
@@ -42,7 +43,8 @@ preprocess_col = sg.Column(
     [
         [sg.Text("Preprocessing", key="pp_text")],
         [sg.Button("START", key="pp_start")],
-        [sg.ProgressBar(6, key='pp_progress_bar', visible=False)]
+        [sg.ProgressBar(6, key='pp_progress_bar', visible=False)],
+        [sg.Button("Return to main menue", key='pp_return')]
     ],
     key="preprocess_col",
     visible=False
@@ -68,7 +70,11 @@ def start_screen():
 
     window["start_col"].update(visible=False)
     return result
-        
+
+def data_requirements_screen():
+    result = State.EXIT
+    return result
+
 def main_menu_screen():
     window["main_menu_col"].update(visible=True)
     result = State.EXIT
@@ -88,7 +94,6 @@ def main_menu_screen():
     window["main_menu_col"].update(visible=False)
     return result
 
-
 def preprocess_screen():
     window["preprocess_col"].update(visible=True)
     result = State.EXIT
@@ -97,7 +102,10 @@ def preprocess_screen():
         event, values = window.read()
 
         if event == sg.WIN_CLOSED:
-            return
+            return State.EXIT
+        if event == "pp_return":
+            result = State.MAIN_MENU
+            break
         if event == "pp_start":
             count = 0
             window["pp_text"].update("Preprocessing in progress...")
@@ -106,59 +114,60 @@ def preprocess_screen():
             if(preprocess_bast_locations.run()):
                 count += 1
                 window["pp_progress_bar"].update(current_count=count)
+                if(preprocess_mst_locations.run()):
+                    count += 1
+                    window["pp_progress_bar"].update(current_count=count)
+                    if(preprocess_bast_counting_data.run()):
+                        count += 1
+                        window["pp_progress_bar"].update(current_count=count)
+                        if(preprocess_mst_counting_data.run()):
+                            count += 1
+                            window["pp_progress_bar"].update(current_count=count)
+                            if(preprocess_2025_visum_model.run()):
+                                count += 1
+                                window["pp_progress_bar"].update(current_count=count)
+                                if(combine_preprocessed_files.run()):
+                                    count += 1
+                                    window["pp_progress_bar"].update(current_count=count)                                    
+                                else:
+                                    sg.popup("Combining preprocessed files failed")
+                            else:
+                                sg.popup("Preprocessing Visum model failed")
+                        else:
+                            sg.popup("Preprocessing MST counting data failed")
+                    else:
+                        sg.popup("Preprocessing BAST counting data failed")
+                else:
+                    sg.popup("Preprocessing MST failed!")
             else:
                 sg.popup("Preprocessing BAST failed!")
 
-            if(preprocess_mst_locations.run()):
-                count += 1
-                window["pp_progress_bar"].update(current_count=count)
-            else:
-                sg.popup("Preprocessing MST failed!")
-            
-            if(preprocess_bast_counting_data.run()):
-                count += 1
-                window["pp_progress_bar"].update(current_count=count)
-            else:
-                sg.popup("Preprocessing BAST counting data failed")
-
-            if(preprocess_mst_counting_data.run()):
-                count += 1
-                window["pp_progress_bar"].update(current_count=count)
-            else:
-                sg.popup("Preprocessing MST counting data failed")
-
-            if(preprocess_2025_visum_model.run()):
-                count += 1
-                window["pp_progress_bar"].update(current_count=count)
-            else:
-                sg.popup("Preprocessing Visum model failed")
-
-            if(combine_preprocessed_files.run()):
-                count += 1
-                window["pp_progress_bar"].update(current_count=count)
-            else:
-                sg.popup("Combining preprocessed files failed")
-            sg.popup("Preprocessing completed!")
+            if(count == 6):
+                sg.popup("Preprocessing completed successfully!")
+            window["pp_progress_bar"].update(current_count=0)
+            window["pp_progress_bar"].update(visible=False)
+            window["pp_text"].update("Preprocessing")
 
 
     window["preprocess_col"].update(visible=False)
-
+    return result
 
 if __name__ == "__main__":
     state = State.START
     while True:
-        if state == State.START:
+        if state == State.EXIT:
+            break
+        elif state == State.START:
             state = start_screen()
-        elif state == State.PREPROCESS:
-            state = preprocess_screen()
         elif state == State.MAIN_MENU:
             state = main_menu_screen()
-        elif state == State.EXIT:
-            break
+        elif state == State.DATA_REQ:
+            state = data_requirements_screen()
+        elif state == State.PREPROCESS:
+            state = preprocess_screen()
         else:
             print("Invalid state.")
             break
     window.close()
     sys.exit()
     
-

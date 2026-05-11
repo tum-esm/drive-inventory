@@ -55,8 +55,7 @@ def start_screen():
         event, values = window.read()
         
         if event == sg.WIN_CLOSED:
-            result = State.EXIT
-            break
+            return
         if event == "start":
             result = State.MAIN_MENU
             break
@@ -72,8 +71,7 @@ def main_menu_screen():
         event, values = window.read()
 
         if event == sg.WIN_CLOSED:
-            result = State.EXIT
-            break
+            return
         if event == "main_menu_exit":
             result = State.EXIT
             break
@@ -93,8 +91,7 @@ def preprocess_screen():
         event, values = window.read()
 
         if event == sg.WIN_CLOSED:
-            result = State.EXIT
-            break
+            return
         if event == "pp_start":
             window["pp_text"].update("Preprocessing in progress...")
             if(preprocess_bast_locations.run()):

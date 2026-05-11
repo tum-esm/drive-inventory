@@ -48,15 +48,15 @@ from utils import excel_calendar
 
 def run():
     # define file paths
-    mst_file_path = data_paths.MST_COUNTING_PATH + 'preprocessed_lhm_counting_data_2025.parquet'
-    bast_file_path = data_paths.BAST_COUNTING_PATH + 'preproc_bast_counting_data_from2025.parquet'
-    visum_file_path = data_paths.VISUM_2025_FOLDER_PATH + 'visum_links_2025.gpkg'
+    mst_file_path = data_paths.MST_COUNTING_PATH + 'preprocessed_lhm_counting_data_until2024.parquet'
+    bast_file_path = data_paths.BAST_COUNTING_PATH + 'preprocessed_bast_counting_data_until2024.parquet'
+    visum_file_path = data_paths.VISUM_FOLDER_PATH + 'visum_links.gpkg'
 
     try:
         # import and concatenate bast and mst counting data
         counting_data = pd.concat([pd.read_parquet(mst_file_path), 
                                 pd.read_parquet(bast_file_path)], axis = 0)
-        counting_data = counting_data[counting_data['date'] < '2026-01-01']
+        counting_data = counting_data[counting_data['date'] < '2025-01-01']
         # import visum links data
         visum_links = gpd.read_file(visum_file_path)
     except Exception as e:
@@ -143,7 +143,7 @@ def run():
             return group
 
         # Apply the outlier detection function to each group and concatenate the results
-        volume_processed_outliers_df = volume_processed.groupby(['road_link_id', 'vehicle_class', 'day_type'], group_keys=False).apply(detect_outliers)
+        volume_processed_outliers_df = volume_processed.groupby(['road_link_id', 'vehicle_class', 'day_type']).apply(detect_outliers)
 
         # Reset the index and rename axis to obtain a flat column hierarchy
         volume_processed_outliers_df = volume_processed_outliers_df.reset_index(drop=True)
@@ -174,11 +174,11 @@ def run():
         # In[7]:
 
 
-        cnt_ref = volume_processed[(volume_processed['date'].between('2025-01-01', '2025-12-31')) &
+        cnt_2019 = volume_processed[(volume_processed['date'].between('2019-01-01', '2019-12-31')) &
                                     (volume_processed['day_type'] == 0)]
-        mean_cnt_2025 = cnt_ref.groupby(['road_link_id', 'vehicle_class'])['daily_value'].apply(iqr_mean).reset_index()
-        mean_cnt_2025 = mean_cnt_2025.pivot(columns = 'vehicle_class', index = 'road_link_id')
-        mean_cnt_2025 = mean_cnt_2025.droplevel(0, axis=1)
+        mean_cnt_2019 = cnt_2019.groupby(['road_link_id', 'vehicle_class'])['daily_value'].apply(iqr_mean).reset_index()
+        mean_cnt_2019 = mean_cnt_2019.pivot(columns = 'vehicle_class', index = 'road_link_id')
+        mean_cnt_2019 = mean_cnt_2019.droplevel(0, axis=1)
 
         #aggregate dtv for each road link of the visum model
         visum_links['dtv_PC'] = visum_links['dtv_SUM'] * visum_links['delta_PC']
@@ -186,12 +186,18 @@ def run():
         visum_links['dtv_HGV'] = visum_links['dtv_SUM'] * visum_links['delta_HGV']
         visum_grp = visum_links.groupby('road_link_id')[['dtv_SUM','dtv_PC','dtv_LCV', 'dtv_HGV']].sum()
 
-        visum_validation = pd.concat([mean_cnt_2025, visum_grp.loc[visum_grp.index.isin(mean_cnt_2025.index)]], axis=1)
+        visum_validation = pd.concat([mean_cnt_2019, visum_grp.loc[visum_grp.index.isin(mean_cnt_2019.index)]], axis=1)
 
         # calculate sqv value for each vehicle class
         for vehicle_class in ['SUM', 'PC', 'LCV', 'HGV']:
             visum_validation['sqv_' + vehicle_class] = visum_validation.apply(
                 lambda row: calc_sqv(row[vehicle_class], row['dtv_' + vehicle_class]), axis = 1)
+
+
+        # In[8]:
+
+
+        visum_validation[visum_validation['sqv_SUM'] > 0.6].index.nunique()
 
 
         # In[9]:
@@ -216,12 +222,12 @@ def run():
 
         # ### Flag incomplete timeseries
 
-        # In[10]:
+        # In[11]:
 
 
-        time_start = '2025-01-01'
-        time_end = '2025-12-31'
-        completeness_thres = 0.6
+        time_start = '2019-01-01'
+        time_end = '2024-12-31'
+        completeness_thres = 0.8
 
         # find counting stations that cover
         df = volume_processed[(volume_processed['vehicle_class'] == 'SUM') &
@@ -241,7 +247,7 @@ def run():
         volume_processed.insert(4,'complete', volume_processed['completness'].apply(lambda x: True if (x > completeness_thres) or (x==0.0) else False))
 
 
-        # In[11]:
+        # In[12]:
 
 
         df = volume_processed[(volume_processed['vehicle_class']=='SUM')]
@@ -249,11 +255,20 @@ def run():
         pd.Series([road_types[i] for i in df['road_link_id'].unique()]).value_counts()
 
 
-        # In[12]:
+        # In[13]:
 
 
         df = volume_processed[(volume_processed['vehicle_class']=='SUM') & 
-                            (volume_processed['complete']) &
+                            (volume_processed['complete'] > 0.8)]
+        print(f'Number of rows in the dataset : {len(df)}')
+        pd.Series([road_types[i] for i in df['road_link_id'].unique()]).value_counts()
+
+
+        # In[14]:
+
+
+        df = volume_processed[(volume_processed['vehicle_class']=='SUM') & 
+                            (volume_processed['complete'] > 0.8) &
                             (volume_processed['valid'])]
         print(f'Number of rows in the dataset : {len(df)}')
         pd.Series([road_types[i] for i in df['road_link_id'].unique()]).value_counts()
@@ -262,7 +277,7 @@ def run():
         # ## Aggregate Road Types
         # Since Access-residential, and TrunkRoad/Primary-National only have < 5 counting stations, they will be merged to Distributor/Secondary road_type.
 
-        # In[13]:
+        # In[15]:
 
 
         volume_processed.insert(7, 'scaling_road_type', volume_processed['road_type'])
@@ -273,14 +288,14 @@ def run():
 
         # ## Store as Parquet File
 
-        # In[14]:
+        # In[16]:
 
 
         # path to mst counting data
         data_path = data_paths.COUNTING_PATH
 
         # Store the dataframe as a parquet file
-        volume_processed.to_parquet(data_path+'counting_data_combined_from2025.parquet', index=False)
+        volume_processed.to_parquet(data_path+'counting_data_combined_until2024_v2.parquet', index=False)
     except Exception as e:
         print("Something went wrong while trying to combine the preprocessed files.")
         return False

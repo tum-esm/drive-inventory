@@ -14,7 +14,7 @@
 # <!--Notebook description and usage information-->
 # This notebook processes the raw VISUM traffic model export and converts the data into *.gpkg files.
 
-# In[1]:
+# In[5]:
 
 
 import sys
@@ -31,7 +31,7 @@ from utils import traffic_counts
 # The VISUM traffic model provides geoinformation for every road in the region of interest. This includes the indicated speed, the road gradient, road type, hour capacity and the daily average traffic of different vehicle classes.<br>
 # Additionally, origin-destination matricies, a fundamental input for macroscopic traffic models, are imported. These include the number of starts within the region and will be used to determine cold start emissions.
 
-# In[2]:
+# In[6]:
 
 def run():
 
@@ -55,7 +55,7 @@ def run():
         print(f"Coordinate reference system of VISUM zones data: {visum_zones.crs}")
 
 
-        # In[3]:
+        # In[7]:
 
 
         # column mapping for new model
@@ -78,7 +78,7 @@ def run():
 
         # ## Notebook functions
 
-        # In[4]:
+        # In[8]:
 
 
         def hbefa_road_type(visum_typeno, speed) -> str: 
@@ -127,7 +127,7 @@ def run():
                 return 'none'
 
 
-        # In[5]:
+        # In[9]:
 
 
         def hbefa_road_gradients(visum_gradient) -> str:
@@ -148,7 +148,7 @@ def run():
             return hbefa_gradient_string
 
 
-        # In[6]:
+        # In[10]:
 
 
         def hbefa_speed_value(hbefa_road_type:str,
@@ -186,7 +186,7 @@ def run():
         # - Drop columns with undefined road type
         # - Rename columns
 
-        # In[7]:
+        # In[11]:
 
 
         # drop columns where the daily traffic ('SUMME_KFZ') is < 1 vehicle
@@ -223,7 +223,7 @@ def run():
         # # Scaling road types
         # Since there are no scaling factors for every road type but aggregated time profiles, a column 'scaling_road_type' is introduced to match the scaling factors with the visum model
 
-        # In[8]:
+        # In[12]:
 
 
         # since there are no scaling factors for every road type but aggregated time profiles, 
@@ -239,16 +239,10 @@ def run():
         visum_links['scaling_road_type'] = visum_links['road_type'].map(scaling_road_types)
 
 
-        # In[9]:
-
-
-        visum_links.plot()
-
-
         # # Vehicle share correction factors
         # Scaling the VISUM model by traffic counting data requires vehicle-specific counting data as provided with classified 8+1 counts. With these counts it is possible to estimate an average vehicle share for each road type, however, it is not possible to account for spatial differences. While the total traffic volume is driven by personal cars, this effect is not severe for this vehicle type. In contrast, heavy trucks and light cargo vehicle show significant inter road-type differences in vehicle share which should be accounted with a correction factor. The correction factor is based on actual shares provided by the VISUM model and counted shares from traffic counting stations. 
 
-        # In[10]:
+        # In[13]:
 
 
         # calculate vehicle shares of the vehicle classes
@@ -257,35 +251,27 @@ def run():
         visum_links['delta_PC'] = visum_links['dtv_PC'] / visum_links['dtv_SUM']
 
 
-        # In[11]:
+        # In[ ]:
 
 
         cal = excel_calendar.Calendar()
         cycles = traffic_counts.TrafficCounts()
 
-        ref_year = 2025
-
         dates = cal.get_calendar()
         dates['combined_day_type'] = dates['date'].apply(cal.get_day_type_combined)
-        normweekdays_ref = dates [(dates['date'].between(f"{ref_year}-01-01",f"{ref_year}-12-31")) &
+        normweekdays_2019 = dates [(dates['date'].between('2019-01-01','2019-12-31')) &
                                 (dates['combined_day_type'] == 0)]['date']
 
-        # calculate vehicle shares on average norm weekday
+        # calculate vehicle shares on average norm weekday in 2019
         # these values are used to calculate the vehicle share correction factors
-        shares_ref = cycles.vehicle_shares.loc[:,:,normweekdays_ref].reset_index()
-        shares_ref = shares_ref.groupby(['scaling_road_type','vehicle_class'])[0].mean()
+        shares_2019 = cycles.vehicle_shares.loc[:,:,normweekdays_2019].reset_index()
+        shares_2019 = shares_2019.groupby(['scaling_road_type','vehicle_class'])[0].mean()
 
         visum_links['hgv_corr'] = visum_links.apply(\
-            lambda row : row['delta_HGV'] / shares_ref.loc[row['scaling_road_type'],'HGV'], axis = 1)
+            lambda row : row['delta_HGV'] / shares_2019.loc[row['scaling_road_type'],'HGV'], axis = 1)
 
         visum_links['lcv_corr'] = visum_links.apply(\
-            lambda row : row['delta_LCV'] / shares_ref.loc[row['scaling_road_type'],'LCV'], axis = 1)
-
-
-        # In[12]:
-
-
-        cycles.vehicle_shares
+            lambda row : row['delta_LCV'] / shares_2019.loc[row['scaling_road_type'],'LCV'], axis = 1)
 
 
         # ## Distribute cold starts
@@ -293,7 +279,7 @@ def run():
         # 
         # <img src="../../docs/img/vehicle_starts_distribution.png" width="600">
 
-        # In[13]:
+        # In[14]:
 
 
         # add empty columns to the visum links file for cold starts
@@ -323,7 +309,7 @@ def run():
 
         # ## Save processed data
 
-        # In[14]:
+        # In[15]:
 
 
         links_columns_to_keep = ['road_link_id', 'road_type', 'scaling_road_type','hour_capacity',
@@ -331,8 +317,7 @@ def run():
                                 'delta_PC', 'delta_LCV', 'delta_HGV', 'hgv_corr', 'lcv_corr', 
                                 'PC_cold_starts', 'LCV_cold_starts', 'geometry']
 
-
-        visum_links[links_columns_to_keep].to_file(data_paths.VISUM_2025_FOLDER_PATH+'visum_links_2025.gpkg',
+        visum_links[links_columns_to_keep].to_file(data_paths.VISUM_FOLDER_PATH+'visum_links_2025.gpkg',
                                                 driver='GPKG')
     except Exception as e:
         print("Could not preprocess the visum model")

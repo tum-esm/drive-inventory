@@ -5,13 +5,13 @@
 # *Technical University of Munich<br>
 # Professorship of Environmental Sensing and Modeling<br><br>*
 # **Author:**  Ali Ahmad Khan & Daniel Kühbacher<br>
-# **Date:**  25.3.2026
+# **Date:**  27.3.2025
 # 
 # --- 
 # 
 # # LHM Counting Data processing
 # 
-# This script loads the 'Jahresexport_MST_Detektoren*.csv', cleans the dataset and converts the data into a predetermined data model. Only the sensors present in 'mst_locations_selected.gpkg' are worked upon<br>
+# This script loads the 'Jahresexport_MST_Detektoren*.csv', 'Q*_2019.csv' files, cleans the dataset and converts the data into a predetermined data model. Only the sensors present in 'mst_locations_selected.gpkg' are worked upon<br>
 # 
 # **Required steps**
 # - Import file and convert columns to meaningful datatypes
@@ -19,7 +19,7 @@
 # - Convert the ART column into given vehicle classes
 # - Merge counting data with location data 
 
-# In[16]:
+# In[7]:
 
 
 import sys
@@ -34,12 +34,11 @@ from utils import data_paths
 
 # ### Import and Clean raw data from *.csv file
 
-# In[10]:
+# In[76]:
 
 def run():
 
     # path to mst counting data
-    data_path_2025 = data_paths.MST_COUNTING_PATH_2025
     data_path = data_paths.MST_COUNTING_PATH
 
     try:
@@ -50,7 +49,7 @@ def run():
         return False
 
     # list of file patterns to match
-    file_patterns = ['Jahresexport_MST_Detektoren_*.csv']
+    file_patterns = ['Quartalsexport_MST_Detektoren*.csv']
     # Initializes an empty DataFrame
     mst_raw_combined_df = pd.DataFrame()
 
@@ -59,7 +58,7 @@ def run():
         for file_pattern in file_patterns:
 
             # gets a list of file paths that match the pattern
-            file_paths = glob.glob(data_path_2025 + file_pattern)
+            file_paths = glob.glob(data_path + file_pattern)
 
             # Iterates over the file paths and read each CSV file
             for file_path in file_paths:
@@ -94,7 +93,7 @@ def run():
         # 
         # ### Create Datframe for volume of traffic for lhm
 
-        # In[11]:
+        # In[78]:
 
 
         # Dict to convert ART volume values to vehicle class
@@ -131,7 +130,7 @@ def run():
 
         # ### Create Datframe for speed of traffic for lhm
 
-        # In[12]:
+        # In[79]:
 
 
         # Dict to convert ART speed values to vehicle class
@@ -172,7 +171,7 @@ def run():
 
         # ### Concatenate the volume and speed dataframes for lhm & Merge with location data
 
-        # In[13]:
+        # In[80]:
 
 
         # Concat the volume and speed dataframes together
@@ -198,11 +197,11 @@ def run():
 
         # ## Store as Parquet File
 
-        # In[15]:
+        # In[84]:
 
 
         # Store the dataframe as a parquet file
-        mst_preprocessed.to_parquet(data_path+'preprocessed_lhm_counting_data_2025.parquet', index=False)
+        mst_preprocessed.to_parquet(data_path+'preprocessed_lhm_counting_data_until2024.parquet', index=False)
     except Exception as e:
         print("Could not process the MST counting data")
         return False

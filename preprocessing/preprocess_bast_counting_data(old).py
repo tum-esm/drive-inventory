@@ -19,7 +19,7 @@
 # - Convert the format from wide to long table and pivot to achieve the data model
 # - Merge Counting Data with location data
 
-# In[20]:
+# In[1]:
 
 
 import sys
@@ -33,7 +33,7 @@ from utils import data_paths
 
 # ## Import and Clean raw data from the *.csv file
 
-# In[21]:
+# In[2]:
 
 def run():
 
@@ -48,7 +48,7 @@ def run():
 
     try:
         # Reads Bast Counting data from the csv file
-        bast_raw = pd.read_csv(data_path+'BAST_CountingStations_daily_from2025.csv', 
+        bast_raw = pd.read_csv(data_path+'BAST_CountingStations_daily_until2024.csv', 
                             delimiter=',', decimal = ';', encoding='ISO-8859-1', index_col =0)
     except Exception as e:
         print("Could not read Bast counting data")
@@ -70,7 +70,7 @@ def run():
         # 
         # ### Create DataFrame with rows for each detector id
 
-        # In[22]:
+        # In[3]:
 
 
         # Keep rows only with Zst that are present in geopackage dataframe
@@ -96,7 +96,7 @@ def run():
 
         # ### Create a dataframe with per hour column
 
-        # In[23]:
+        # In[5]:
 
 
         # Id VAriable to be used for melt
@@ -156,7 +156,7 @@ def run():
 
         # ## Merge Dataframe with location data
 
-        # In[24]:
+        # In[6]:
 
 
         # Merge the processed bast data with bast location
@@ -173,7 +173,7 @@ def run():
 
         # ## Store as Parquet File
 
-        # In[26]:
+        # In[9]:
 
 
         # Convert all columns to string to parquet storage

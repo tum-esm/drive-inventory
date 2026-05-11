@@ -2,7 +2,7 @@
 to the traffic cycles. 
 Calculates daily, annual and hourly cycles for traffic counting data.
 """
-__version__ = 0.3
+__version__ = 0.4
 __author__ = ['Ali Ahmad Khan', 'Daniel Kühbacher']
 
 import pandas as pd
@@ -21,8 +21,8 @@ class TrafficCounts:
     """
 
     def __init__(self,
-                 init_timeprofile = True, 
-                 reference_year = '2019', # reference year for normalization
+                 reference_year = 2025, # reference year for normalization
+                 init_timeprofile = True,
                  reference_day_type = 0): # normal weekday
         """Loads traffic couning data and preprocesses daily, annual and hourly cycles.
         Args: 
@@ -88,7 +88,7 @@ class TrafficCounts:
         hour_column_names = [str(i) for i in range(0,24)]
         _d_cycles = _counting_df.drop(_irrelevant_rows, axis=1).set_index('date')\
             .groupby(['day_type', 'vehicle_class'])[hour_column_names]\
-                .resample('1ME').median()
+                .resample('ME').median()
             
         # normalize daily cycles
         _d_cycles[hour_column_names] = _d_cycles[hour_column_names]\
@@ -305,6 +305,6 @@ if __name__ == "__main__":
     """
     
     count = TrafficCounts(init_timeprofile=False)
-    print("Alpha: \n", count.get_daily_scaling_factors(date = '2023-12-01'))
-    print("Gamma: \n", count.get_vehicle_share(date = '2023-12-01'))
-    print("Beta: \n", count.get_hourly_scaling_factors('2023-12-01'))
+    print("Alpha: \n", count.get_daily_scaling_factors(date = '2025-12-01'))
+    print("Gamma: \n", count.get_vehicle_share(date = '2025-12-01'))
+    print("Beta: \n", count.get_hourly_scaling_factors('2025-12-01'))

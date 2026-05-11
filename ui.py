@@ -1,4 +1,5 @@
 import sys
+import os
 from unittest import case
 import PySimpleGUI as sg
 from preprocessing import preprocess_bast_locations
@@ -9,6 +10,18 @@ from preprocessing import combine_preprocessed_files
 from preprocessing import preprocess_bast_counting_data
 
 from enum import Enum
+
+def check_restricted_input():
+    traffic_model = os.path.isfile()
+    counting_data = False
+    emission_factors = False
+    return (traffic_model, counting_data, emission_factors)
+
+def check_auxiliary_data():
+    return (False)
+
+def check_geodata():
+    return (False, False)
 
 #States of the GUI
 class State(Enum):
@@ -42,9 +55,15 @@ main_menu_col = sg.Column(
 data_req_col = sg.Column(
     [
         [sg.Text("Data Requirements:", key="dr_text")],
-        [sg.Text("Restricted Input"), sg.Button("Check", key="dr_ri")],
-        [sg.Text("Auxiliary Data"), sg.Button("Check", key="dr_ad")],
-        [sg.Text("Geodata"), sg.Button("Check", key="dr_gd")],
+        [sg.Text("Restricted Input", size=(15,1)), sg.Button("Check", key="dr_ri")],
+        [sg.Text("\tTraffic Model", size=(35,1)), sg.Text("\t\tFound")],
+        [sg.Text("\tTraffic Counting Data", size=(35,1)), sg.Input(), sg.FileBrowse()],
+        [sg.Text("\tHBEFA Emission factors", size=(35,1)), sg.Text("\t\tFound")],
+        [sg.Text("Auxiliary Data", size=(15,1)), sg.Button("Check", key="dr_ad")],
+        [sg.Text("\tDate Information", size=(35,1)), sg.Text("\t\tFound")],
+        [sg.Text("Geodata", size=(15,1)), sg.Button("Check", key="dr_gd")],
+        [sg.Text("\tRegion of Interest", size=(35,1)), sg.Text("\t\tFound")],
+        [sg.Text("\tSpatial Grid", size=(35,1)), sg.Text("\t\tFound")],
         [sg.Button("Return to main menu", key='dr_return')]
     ],
     key="data_req_col",
@@ -93,6 +112,12 @@ def data_requirements_screen():
             return
         if event == "dr_return":
             result = State.MAIN_MENU
+            break
+        if event == "dr_ri":
+            break
+        if event == "dr_ad":
+            break
+        if event == "dr_gd":
             break
     window["data_req_col"].update(visible=False)
     return result       

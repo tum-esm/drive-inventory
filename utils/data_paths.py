@@ -10,27 +10,26 @@ DATA_PATH = abs_path + "/data/"
 BAST_LOCATIONS_FILE = abs_path + "/data/auxiliary/bast_locations_selected.gpkg"
 CALENDER_FILE = abs_path + "/data/auxiliary/calender_18to26.xlsx"
 MUNICH_BOARDERS_FILE = abs_path + "/data/geodata/munich_boarders.gpkg"
+
 # extended boarders including the surrounding motorway
 MUNICH_BOARDERS_EXTENDED_FILE = abs_path + "/data/geodata/munich_boarders_extended.gpkg"
+
+#Spatial grids
 TNO_100M_GRID  = abs_path + "/data/geodata/TNO_100m_grid_munich.gpkg"
 TNO_1km_GRID = abs_path + "/data/geodata/TNO_1km_grid_munich.gpkg"
 
 # traffic model
-VISUM_FOLDER_PATH = abs_path + "/data/restricted_input/traffic_model/"
+VISUM_2019_FOLDER_PATH = abs_path + "/data/restricted_input/traffic_model/"
 VISUM_2025_FOLDER_PATH = abs_path + "/data/restricted_input/traffic_model_2025/"
 
 # traffic counting data
 COUNTING_PATH = abs_path + "/data/restricted_input/counting_data/"
 MST_COUNTING_PATH = abs_path + "/data/restricted_input/counting_data/lhm/"
-MST_COUNTING_PATH_2025 = abs_path + "/data/restricted_input/counting_data/lhm/from_2025/"
 BAST_COUNTING_PATH = abs_path + "/data/restricted_input/counting_data/bast/"
-COMBINED_COUNTING_DATA = COUNTING_PATH + "counting_data_combined_from2025.parquet"
+COMBINED_COUNTING_DATA = COUNTING_PATH + "counting_data_combined.parquet"
 
 # HBEFA emission factors
 EF_PATH = abs_path + "/data/restricted_input/hbefa/"
-EF_TS = abs_path + "/data/restricted_input/hbefa/EFA_HOT_ts_hbefa.txt"
-EF_AGG = abs_path + "/data/restricted_input/hbefa/EFA_HOT_aggregated_hbefa.txt"
-EF_COLD = abs_path + "/data/restricted_input/hbefa/EFA_ColdStart_hbefa.txt"
 
 # OUTPUT DATA
 # inventory output folder

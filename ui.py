@@ -11,18 +11,6 @@ from preprocessing import preprocess_bast_counting_data
 
 from enum import Enum
 
-def check_restricted_input():
-    traffic_model = os.path.isfile()
-    counting_data = False
-    emission_factors = False
-    return (traffic_model, counting_data, emission_factors)
-
-def check_auxiliary_data():
-    return (False)
-
-def check_geodata():
-    return (False, False)
-
 #States of the GUI
 class State(Enum):
     EXIT = -1
@@ -31,6 +19,7 @@ class State(Enum):
     DATA_REQ_PP = 2
     PREPROCESS = 3
     DATA_REQ_EC = 4
+    EMISSION_CALCULATION = 5
 
 # Definition of the different columns for the different screens of the GUI
 start_col = sg.Column(
@@ -48,6 +37,7 @@ main_menu_col = sg.Column(
         [sg.Text("1. Data Requirements Preprocessing", key="main_menu_data_req"), sg.Button("Go", key="mm_data_req_pp")],
         [sg.Text("2. Data Preprocessing", key="main_menu_data_preprocess"), sg.Button("Go", key="mm_preprocess")],
         [sg.Text("3. Data Requirements Emission Calculations", key="main_menu_data_req_ec"), sg.Button("Go", key="mm_data_req_ec")],
+        [sg.Text("4. Emission Calculation", key="main_menu_emission_calculation"), sg.Button("Go", key="mm_emission_calculation")],
         [sg.Button("Exit", key="main_menu_exit")]
     ],
     key="main_menu_col",
@@ -74,10 +64,10 @@ pp_data_req_col = sg.Column(
 ec_data_req_col = sg.Column(
     [
         [sg.Text("Data Requirements:", key="dr_text")],
-        [sg.Text("Cleaned Location Dataset", size=(30,1), ), sg.Input(), sg.FileBrowse()],
-        [sg.Text("Traffic Model", size=(30,1)), sg.Input(), sg.FileBrowse()],
-        [sg.Text("Traffic Counting Data"), sg.Input(), sg.FileBrowse()],
-        [sg.Text("\tHBEFA Emission factors", size=(35,1)), sg.Text("\t\tFound")]
+        [sg.Text("Cleaned Location Dataset", size=(30,1)), sg.Input(key="ec_cld", enable_events=True), sg.FileBrowse()],
+        [sg.Text("Traffic Model", size=(30,1)), sg.Input(key="ec_tm", enable_events=True), sg.FileBrowse()],
+        [sg.Text("Traffic Counting Data", size=(30,1)), sg.Input(key="ec_cd", enable_events=True), sg.FileBrowse()],
+        [sg.Text("HBEFA Emission factors", size=(30,1)), sg.Input(key="ec_ef", enable_events=True), sg.FileBrowse()],
     ],
     key="ec_data_req_col",
     visible=False
@@ -94,9 +84,19 @@ preprocess_col = sg.Column(
     visible=False
 )
 
+emission_calculation_col = sg.Column(
+    [
+        [sg.Text("Emission Calculation", key="ec_text")],
+        [sg.Button("START", key="ec_start")],
+        [sg.ProgressBar(6, key='ec_progress_bar', visible=False)],
+        [sg.Button("Return to main menu", key='ec_return')]
+    ],
+    key="emission_calculation_col",
+    visible=False
+)
 
 
-layout = [[start_col, preprocess_col, main_menu_col, pp_data_req_col]]
+layout = [[start_col, preprocess_col, main_menu_col, pp_data_req_col, ec_data_req_col, emission_calculation_col]]
 
 # Window definition
 window = sg.Window("DRIVE 1.0", layout, size=(980, 510), finalize=True, resizable=True)
@@ -147,6 +147,22 @@ def ec_data_requirements_screen():
         if event == "ec_return":
             result = State.MAIN_MENU
             break
+        if event == "ec_cld":
+            file_path = values["ec_cld"]
+            print(file_path)
+            break
+        if event == "ec_tm":
+            file_path = values["ec_tm"]
+            print(file_path)
+            break
+        if event == "ec_cd":
+            file_path = values["ec_cd"]
+            print(file_path)
+            break
+        if event == "ec_ef":
+            file_path = values["ec_ef"]
+            print(file_path)
+            break
     window["ec_data_req_col"].update(visible=False)
     return result
 
@@ -170,6 +186,9 @@ def main_menu_screen():
             break
         if event == "mm_data_req_ec":
             result = State.DATA_REQ_EC
+            break
+        if event == "mm_emission_calculation":
+            result = State.EMISSION_CALCULATION
             break
     window["main_menu_col"].update(visible=False)
     return result
@@ -232,6 +251,32 @@ def preprocess_screen():
     window["preprocess_col"].update(visible=False)
     return result
 
+def emission_calculation_screen():
+    window["emission_calculation_col"].update(visible=True)
+    result = State.EXIT
+
+    while True:
+        event, values = window.read()
+
+        if event == sg.WIN_CLOSED:
+            return State.EXIT
+        if event == "ec_return":
+            result = State.MAIN_MENU
+            break
+        if event == "ec_start":
+            count = 0
+            window["ec_text"].update("Emission calculation in progress...")
+            window["ec_progress_bar"].update(visible=True)
+
+            # here the emission calculation function can be called and the progress bar can be updated accordingly
+
+            window["ec_progress_bar"].update(current_count=count)
+            window["ec_progress_bar"].update(visible=False)
+            window["ec_text"].update("Emission Calculation")
+
+    window["emission_calculation_col"].update(visible=False)
+    return result
+
 if __name__ == "__main__":
     state = State.START
     while True:
@@ -247,6 +292,8 @@ if __name__ == "__main__":
             state = preprocess_screen()
         elif state == State.DATA_REQ_EC:
             state = ec_data_requirements_screen()
+        elif state == State.EMISSION_CALCULATION:
+            state = emission_calculation_screen()
         else:
             print("Invalid state.")
             break

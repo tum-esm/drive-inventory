@@ -7,7 +7,7 @@ import re
 import base64
 import pandas as pd
 from io import StringIO
-import data_paths
+from utils import data_paths
 
 # Parameters:
 # emcat: emission category (hot, start, evap-soaked, evap-diurnal, evap-lr)

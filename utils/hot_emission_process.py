@@ -10,15 +10,14 @@ import numpy as np
 from typing import Literal
 from multiprocessing import Queue
 
-from traffic_counts import TrafficCounts
-from hbefa_hot_emissions import HbefaHotEmissions
+from utils import traffic_counts, hbefa_hot_emissions
 
 
 def process_daily_emissions(date: str,
                             mode:Literal['aggregated', 'los_specific'],
                             visum_dict:dict,
-                            cycles_obj:TrafficCounts,
-                            hbefa_obj:HbefaHotEmissions,
+                            cycles_obj:traffic_counts.TrafficCounts,
+                            hbefa_obj:hbefa_hot_emissions.HbefaHotEmissions,
                             result_queue: Queue,
                             error_queue: Queue,
                             ) -> bool:
@@ -124,8 +123,8 @@ def process_daily_emissions(date: str,
 
 def process_hourly_emissions(date: str,
                             visum_dict: dict,
-                            cycles_obj: TrafficCounts,
-                            hbefa_obj: HbefaHotEmissions) -> dict:
+                            cycles_obj: traffic_counts.TrafficCounts,
+                            hbefa_obj: hbefa_hot_emissions.HbefaHotEmissions) -> dict:
     """Calculates hourly emissions for a given date.
     Should only be used for testing or small visum extents, otherwise it is too slow.
 

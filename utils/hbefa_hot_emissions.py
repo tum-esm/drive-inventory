@@ -11,9 +11,7 @@ import numpy as np
 
 from typing import Literal
 
-from traffic_counts import TrafficCounts
-import data_paths 
-import hbefa_requests
+from utils import traffic_counts, data_paths, hbefa_requests
 
 class HbefaHotEmissions:
     """Defines HBEFA parameters and classes, imports emission factors and 
@@ -386,7 +384,7 @@ if __name__ == '__main__':
                     'MOT': 100, 
                     'BUS': 50}
     
-    cycles = TrafficCounts(init_timeprofile=False)
+    cycles = traffic_counts.TrafficCounts(init_timeprofile=False)
     diurnal_cycles = cycles.get_hourly_scaling_factors(date='2019-03-23')
     
     t = HbefaHotEmissions(components = ['CO2(rep)', 'NOx', 'CO'],

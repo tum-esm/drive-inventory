@@ -8,7 +8,7 @@ __author__ = "Daniel Kühbacher"
 import pandas as pd
 from typing import Literal
 
-import data_paths
+from utils import data_paths
 
 class HbefaColdEmissions: 
     """Class to calculate cold start emissions based on HBEFA emission factors.

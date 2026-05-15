@@ -2,13 +2,8 @@ import sys
 import os
 from unittest import case
 import PySimpleGUI as sg
-from preprocessing import preprocess_bast_locations
-from preprocessing import preprocess_mst_locations
-from preprocessing import preprocess_2025_visum_model
-from preprocessing import preprocess_mst_counting_data
-from preprocessing import combine_preprocessed_files
-from preprocessing import preprocess_bast_counting_data
-
+from preprocessing import preprocess_bast_locations, preprocess_mst_locations, preprocess_bast_counting_data, preprocess_mst_counting_data, preprocess_2025_visum_model, combine_preprocessed_files
+from emission_calculation import calculate_hot_emissions, emission_gridding, calculate_cold_emissions, calculate_total_VKT, optimize_VCR_thresholds, calculate_detector_emissons
 from enum import Enum
 
 #States of the GUI
@@ -269,7 +264,37 @@ def emission_calculation_screen():
             window["ec_progress_bar"].update(visible=True)
 
             # here the emission calculation function can be called and the progress bar can be updated accordingly
-
+        
+            if(optimize_VCR_thresholds.run()):
+                count += 1
+                window["ec_progress_bar"].update(current_count=count)
+                if(calculate_total_VKT.run()):
+                    count += 1
+                    window["ec_progress_bar"].update(current_count=count)
+                    if(calculate_cold_emissions.run()):
+                        count += 1
+                        window["ec_progress_bar"].update(current_count=count)
+                        if(calculate_hot_emissions.run()):
+                            count += 1
+                            window["ec_progress_bar"].update(current_count=count)
+                            if(emission_gridding.run()):
+                                count += 1
+                                window["ec_progress_bar"].update(current_count=count) 
+                                if(calculate_detector_emissons.run()):
+                                    count += 1
+                                    window["ec_progress_bar"].update(current_count=count) 
+                                else:
+                                    sg.popup("Calculating detector emissions failed")
+                            else:
+                                sg.popup("Gridding emissions failed")
+                        else:
+                            sg.popup("Calculating hot emissions failed")
+                    else:
+                        sg.popup("Calculating cold emissions failed")
+                else:
+                    sg.popup("Calculating total VKT failed!")
+            else:
+                sg.popup("Optimizing VCR thresholds failed!")
             window["ec_progress_bar"].update(current_count=count)
             window["ec_progress_bar"].update(visible=False)
             window["ec_text"].update("Emission Calculation")

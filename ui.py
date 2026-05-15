@@ -7,11 +7,12 @@ import PySimpleGUI as sg
 from preprocessing import preprocess_bast_locations, preprocess_mst_locations, preprocess_bast_counting_data, preprocess_mst_counting_data, preprocess_2025_visum_model, combine_preprocessed_files
 from emission_calculation import calculate_hot_emissions, emission_gridding, calculate_cold_emissions, calculate_total_VKT, optimize_VCR_thresholds, calculate_detector_emissons
 from utils import check_files, data_paths
+from plotting_and_diagnostics import plot_traffic_model_validation
 from enum import Enum
 
 if not os.path.exists("config.json"):
     shutil.copy("config.default.json", "config.json")
-    
+
 with open("config.json", "r") as f:
     config = json.load(f)
 
@@ -24,6 +25,7 @@ class State(Enum):
     PREPROCESS = 3
     DATA_REQ_EC = 4
     EMISSION_CALCULATION = 5
+    PLOTTING_AND_DIAGNOSTICS = 6
 
 # Definition of the different columns for the different screens of the GUI
 start_col = sg.Column(
@@ -42,6 +44,7 @@ main_menu_col = sg.Column(
         [sg.Text("2. Data Preprocessing", key="main_menu_data_preprocess"), sg.Button("Go", key="mm_preprocess")],
         [sg.Text("3. Data Requirements Emission Calculations", key="main_menu_data_req_ec"), sg.Button("Go", key="mm_data_req_ec")],
         [sg.Text("4. Emission Calculation", key="main_menu_emission_calculation"), sg.Button("Go", key="mm_emission_calculation")],
+        [sg.Text("5. Plotting and Diagnostics", key="main_menu_plotting_and_diagnostics"), sg.Button("Go", key="mm_plotting_and_diagnostics")],
         [sg.Button("Exit", key="main_menu_exit")]
     ],
     key="main_menu_col",
@@ -100,11 +103,21 @@ emission_calculation_col = sg.Column(
     visible=False
 )
 
+plotting_and_diagnostics_col = sg.Column(
+    [
+        [sg.Text("Plotting and Diagnostics", key="pd_text")],
+        [sg.Text("Plot Traffic Model Validation"), sg.Button("START", key="pd_start_tmv")],
+        [sg.Button("Return to main menu", key='pd_return')]
+    ],
+    key="plotting_and_diagnostics_col",
+    visible=False
+)
 
-layout = [[start_col, preprocess_col, main_menu_col, pp_data_req_col, ec_data_req_col, emission_calculation_col]]
+layout = [[start_col, preprocess_col, main_menu_col, pp_data_req_col, ec_data_req_col, emission_calculation_col, plotting_and_diagnostics_col]]
 
 # Window definition
 window = sg.Window("DRIVE 1.0", layout, size=(980, 510), finalize=True, resizable=True)
+
 
 # Definition of the different screens of the GUI
 def start_screen():
@@ -213,6 +226,9 @@ def main_menu_screen():
             break
         if event == "mm_emission_calculation":
             result = State.EMISSION_CALCULATION
+            break
+        if event == "mm_plotting_and_diagnostics":
+            result = State.PLOTTING_AND_DIAGNOSTICS
             break
     window["main_menu_col"].update(visible=False)
     return result
@@ -331,6 +347,24 @@ def emission_calculation_screen():
     window["emission_calculation_col"].update(visible=False)
     return result
 
+def plotting_and_diagnostics_screen():
+    window["plotting_and_diagnostics_col"].update(visible=True)
+    result = State.EXIT
+
+    while True:
+        event, values = window.read()
+
+        if event == sg.WIN_CLOSED:
+            return State.EXIT
+        if event == "pd_return":
+            result = State.MAIN_MENU
+            break
+        if event == "pd_start_tmv":
+            plot_traffic_model_validation.run()
+
+    window["plotting_and_diagnostics_col"].update(visible=False)
+    return result
+
 if __name__ == "__main__":
     print(config["ef_hot_agg_path"])
     config["ef_hot_agg_path"] = "test"
@@ -350,6 +384,8 @@ if __name__ == "__main__":
             state = ec_data_requirements_screen()
         elif state == State.EMISSION_CALCULATION:
             state = emission_calculation_screen()
+        elif state == State.PLOTTING_AND_DIAGNOSTICS:
+            state = plotting_and_diagnostics_screen()
         else:
             print("Invalid state.")
             break

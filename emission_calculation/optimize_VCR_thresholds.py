@@ -57,124 +57,129 @@ warnings.filterwarnings("ignore")
 # In[2]:
 
 def run():
-    # Define start and end time for emission calculation. Ideally this should cover a whole year.
-    start_date = datetime(2019, 1, 1)
-    end_date = datetime(2019, 12, 31)
+    try:
+        # Define start and end time for emission calculation. Ideally this should cover a whole year.
+        start_date = datetime(2019, 1, 1)
+        end_date = datetime(2019, 12, 31)
 
-    # define filename of the visum file
-    visum_filename = "visum_links.GPKG"
+        # define filename of the visum file
+        visum_filename = "visum_links.GPKG"
 
-    # if True, the script will only process the area within the ROI defined by roi_polygon
-    clip_to_area = False # use largest possible area to optimize the vcr thresholds
-    roi_polygon = data_paths.MUNICH_BOARDERS_FILE # defines ROI for clipping
-
-
-    # ## Import data
-
-    # In[3]:
+        # if True, the script will only process the area within the ROI defined by roi_polygon
+        clip_to_area = False # use largest possible area to optimize the vcr thresholds
+        roi_polygon = data_paths.MUNICH_BOARDERS_FILE # defines ROI for clipping
 
 
-    # import visum model, clip it to the ROI, and initialize cycles object
+        # ## Import data
 
-    # import visum model
-    visum = gpd.read_file(data_paths.VISUM_FOLDER_PATH + visum_filename)
-
-    if clip_to_area:
-        roi = gpd.read_file(roi_polygon).to_crs(visum.crs)
-        visum = gpd.clip(visum, roi)
-        visum = visum.explode(ignore_index=True) # convert multipolygons to polygons
-
-    #visum = visum_links
-    visum = visum.reset_index(drop = True).reset_index() # reset index for calculation
-    visum['road_lenght'] = visum['geometry'].length # add road length to visum dict
-
-    # initialize traffic cycles
-    cycles = traffic_counts.TrafficCounts(init_timeprofile=False)
+        # In[3]:
 
 
-    # # Adapt optimization thresholds
+        # import visum model, clip it to the ROI, and initialize cycles object
 
-    # In[ ]:
+        # import visum model
+        visum = gpd.read_file(data_paths.VISUM_FOLDER_PATH + visum_filename)
 
+        if clip_to_area:
+            roi = gpd.read_file(roi_polygon).to_crs(visum.crs)
+            visum = gpd.clip(visum, roi)
+            visum = visum.explode(ignore_index=True) # convert multipolygons to polygons
 
-    # define which road type to optimize for
-    optimize_road_type = 'Motorway-Nat'
+        #visum = visum_links
+        visum = visum.reset_index(drop = True).reset_index() # reset index for calculation
+        visum['road_lenght'] = visum['geometry'].length # add road length to visum dict
 
-    # define hbefa service thresholds
-    vcr_thresholds = {'Motorway-Nat': [0.5, 0.71, 0.98, 1.1],
-                    'Motorway-City': [0.55, 0.71, 0.98, 1.1], # not used
-                    'TrunkRoad/Primary-National': [0.33, 0.5, 0.7, 0.8],
-                    'TrunkRoad/Primary-City': [0.67, 0.82, 0.92, 1.02],
-                    'Distributor/Secondary': [0.37, 0.5, 0.63, 0.8],
-                    'Local/Collector': [0.55, 0.75, 0.9, 1], # not used
-                    'Access-residential': [0.14, 0.25, 0.39, 0.52]}
-
-    # initialize HBEFA emission factors using the service thresholds
-    hbefa = hbefa_hot_emissions.HbefaHotEmissions()
-
-    # apply service thresholds as defined in the notebook setting
-    hbefa.vcr_thresholds = vcr_thresholds
+        # initialize traffic cycles
+        cycles = traffic_counts.TrafficCounts(init_timeprofile=False)
 
 
-    # # Calculate VKT for each vehicle class and traffic condition
+        # # Adapt optimization thresholds
 
-    # In[5]:
-
-
-    #reduce to target road type and caclulate VKT for each day in the timeframe of interest 
-
-    # reduce the visum model to the road type of interest
-    visum_mw = visum[visum['road_type'] == optimize_road_type]#.sample(3000)
-
-    # generate dates index
-    dates = [d.strftime("%Y-%m-%d") for d in pd.date_range(start=start_date,
-                                                        end=end_date, freq='1d')]
-    final_result = {'Freeflow': np.array(5, float),
-                    'Heavy': np.array(5, float),
-                    'Satur.': np.array(5, float),
-                    'St+Go': np.array(5, float),
-                    'St+Go2': np.array(5, float)}
-    for date in dates:
-        cl, vehicle_index = calculate_vkt.calculate_VKT(date = date,
-                                        visum_dict = visum_mw.to_dict('records'),
-                                        cycles_obj = cycles,
-                                        hbefa_obj = hbefa)
-
-        for key, value in cl.items():
-            final_result[key] = final_result[key] + value
-
-    # convert results to dataframe
-    result_df = pd.DataFrame(final_result, index = vehicle_index)
+        # In[ ]:
 
 
-    # # Plot VKT share across in all traffic conditions
-    # 
-    # Only the traffic condition and for PC is used in the plot below
+        # define which road type to optimize for
+        optimize_road_type = 'Motorway-Nat'
 
-    # In[ ]:
+        # define hbefa service thresholds
+        vcr_thresholds = {'Motorway-Nat': [0.5, 0.71, 0.98, 1.1],
+                        'Motorway-City': [0.55, 0.71, 0.98, 1.1], # not used
+                        'TrunkRoad/Primary-National': [0.33, 0.5, 0.7, 0.8],
+                        'TrunkRoad/Primary-City': [0.67, 0.82, 0.92, 1.02],
+                        'Distributor/Secondary': [0.37, 0.5, 0.63, 0.8],
+                        'Local/Collector': [0.55, 0.75, 0.9, 1], # not used
+                        'Access-residential': [0.14, 0.25, 0.39, 0.52]}
+
+        # initialize HBEFA emission factors using the service thresholds
+        hbefa = hbefa_hot_emissions.HbefaHotEmissions()
+
+        # apply service thresholds as defined in the notebook setting
+        hbefa.vcr_thresholds = vcr_thresholds
 
 
-    # calculate the share for each traffic condition and plot the results
+        # # Calculate VKT for each vehicle class and traffic condition
 
-    # calculate the share of vkt for each level of service
-    total_vkt = result_df.loc['PC'].sum().sum()
-    vkt_share = (result_df.loc['PC'] / total_vkt)*100
+        # In[5]:
 
-    fig, ax = plt.subplots(figsize =(6,4), tight_layout =True)
 
-    vkt_share.plot(ax = ax, kind='bar')
+        #reduce to target road type and caclulate VKT for each day in the timeframe of interest 
 
-    plt.title('VKT share in different traffic situations', fontsize = 12)
+        # reduce the visum model to the road type of interest
+        visum_mw = visum[visum['road_type'] == optimize_road_type]#.sample(3000)
 
-    y_labels = ax.get_yticks()
-    y_labels = [f'{label:.0f} %' for label in y_labels]
-    ax.set_xticklabels(labels = ax.get_xticklabels(), rotation=0, fontsize = 10)
-    ax.set_yticklabels(labels = y_labels, fontsize= 10)
-    ax.set_ylabel('LOS Share [%]', fontsize = 12)
+        # generate dates index
+        dates = [d.strftime("%Y-%m-%d") for d in pd.date_range(start=start_date,
+                                                            end=end_date, freq='1d')]
+        final_result = {'Freeflow': np.array(5, float),
+                        'Heavy': np.array(5, float),
+                        'Satur.': np.array(5, float),
+                        'St+Go': np.array(5, float),
+                        'St+Go2': np.array(5, float)}
+        for date in dates:
+            cl, vehicle_index = calculate_vkt.calculate_VKT(date = date,
+                                            visum_dict = visum_mw.to_dict('records'),
+                                            cycles_obj = cycles,
+                                            hbefa_obj = hbefa)
 
-    for i in range(len(vkt_share)):
-            plt.text(i, vkt_share[i]+1, f'{vkt_share[i]:.1f} % ', ha = 'center')
+            for key, value in cl.items():
+                final_result[key] = final_result[key] + value
 
-    plt.ylim(0, vkt_share.max()+5)
-    plt.show()
+        # convert results to dataframe
+        result_df = pd.DataFrame(final_result, index = vehicle_index)
+
+
+        # # Plot VKT share across in all traffic conditions
+        # 
+        # Only the traffic condition and for PC is used in the plot below
+
+        # In[ ]:
+
+
+        # calculate the share for each traffic condition and plot the results
+
+        # calculate the share of vkt for each level of service
+        total_vkt = result_df.loc['PC'].sum().sum()
+        vkt_share = (result_df.loc['PC'] / total_vkt)*100
+
+        fig, ax = plt.subplots(figsize =(6,4), tight_layout =True)
+
+        vkt_share.plot(ax = ax, kind='bar')
+
+        plt.title('VKT share in different traffic situations', fontsize = 12)
+
+        y_labels = ax.get_yticks()
+        y_labels = [f'{label:.0f} %' for label in y_labels]
+        ax.set_xticklabels(labels = ax.get_xticklabels(), rotation=0, fontsize = 10)
+        ax.set_yticklabels(labels = y_labels, fontsize= 10)
+        ax.set_ylabel('LOS Share [%]', fontsize = 12)
+
+        for i in range(len(vkt_share)):
+                plt.text(i, vkt_share[i]+1, f'{vkt_share[i]:.1f} % ', ha = 'center')
+
+        plt.ylim(0, vkt_share.max()+5)
+        plt.show()
+    except Exception as e:
+        print(e)
+        return False
+    return True
 

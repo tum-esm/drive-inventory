@@ -1,14 +1,13 @@
 
 import numpy as np
-from traffic_counts import TrafficCounts
-from hbefa_hot_emissions import HbefaHotEmissions
+from utils import traffic_counts, hbefa_hot_emissions
 
 from itertools import chain
 
 def calculate_VKT(date: str,
                   visum_dict:dict,
-                  cycles_obj:TrafficCounts,
-                  hbefa_obj:HbefaHotEmissions,
+                  cycles_obj:traffic_counts.TrafficCounts,
+                  hbefa_obj:hbefa_hot_emissions.HbefaHotEmissions,
                   ) -> bool:
     """Function to calculate daily emissions for a given date. 
     This implements the HbefaHotEmissions object and can be run as parallell processes.
@@ -67,7 +66,7 @@ def calculate_VKT(date: str,
         htv = (np.transpose(diurnal_cycles.to_numpy()) * dtv_array)
         
         # convert hourly traffic volume to personal car equivalents
-        htv_car_units = np.array([HbefaHotEmissions.car_unit_factors[v]\
+        htv_car_units = np.array([hbefa_hot_emissions.HbefaHotEmissions.car_unit_factors[v]\
             for v in diurnal_cycles.index])
         htv_car_units = (htv * htv_car_units).sum(axis=1)
         

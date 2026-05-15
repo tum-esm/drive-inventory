@@ -173,3 +173,6 @@ data/restricted_input/hbefa
 data/restricted_input/traffic_model
 data/restricted_input/traffic_model_2025
 data/inventory
+
+# config
+config.json

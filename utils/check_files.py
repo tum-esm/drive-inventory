@@ -22,20 +22,20 @@ expected_counting_data = {
 expected_traffic_model_format = {
     "road_link_id":       pd.api.types.is_integer_dtype,   # 'NO' column, originally int
     "road_type":          pd.api.types.is_string_dtype,    # e.g. 'Motorway-Nat'
-    "scaling_road_type":  pd.api.types.is_string_dtype,    # e.g. 'Distributor/Secondary'
-    "hour_capacity":      pd.api.types.is_numeric_dtype,   # 'CAPPRT' column
+    #"scaling_road_type":  pd.api.types.is_string_dtype,    # e.g. 'Distributor/Secondary'
+    "hour_capacity":      pd.api.types.is_integer_dtype,   # 'CAPPRT' column
     "lanes":              pd.api.types.is_integer_dtype,   # 'NUMLANES' column
     "hbefa_speed":        pd.api.types.is_integer_dtype,   # snapped to HBEFA speed values
-    "speed":              pd.api.types.is_numeric_dtype,   # 'V0PRT' original speed
+    #"speed":              pd.api.types.is_integer_dtype,   # 'V0PRT' original speed
     "hbefa_gradient":     pd.api.types.is_string_dtype,    # e.g. '+2%', '-4%'
-    "dtv_SUM":            pd.api.types.is_numeric_dtype,   # daily traffic sum
-    "delta_PC":           pd.api.types.is_float_dtype,     # share of personal cars
-    "delta_LCV":          pd.api.types.is_float_dtype,     # share of light cargo vehicles
-    "delta_HGV":          pd.api.types.is_float_dtype,     # share of heavy goods vehicles
+    "dtv_SUM":            pd.api.types.is_float_dtype,   # daily traffic sum
+    "delta_PC":           pd.api.types.is_float_dtype,     # share of personal cars (optional)
+    "delta_LCV":          pd.api.types.is_float_dtype,     # share of light cargo vehicles (optional)
+    "delta_HGV":          pd.api.types.is_float_dtype,     # share of heavy goods vehicles (optional)
     "hgv_corr":           pd.api.types.is_float_dtype,     # HGV correction factor
     "lcv_corr":           pd.api.types.is_float_dtype,     # LCV correction factor
-    "PC_cold_starts":     pd.api.types.is_float_dtype,     # distributed cold starts PC
-    "LCV_cold_starts":    pd.api.types.is_float_dtype,     # distributed cold starts LCV
+    "PC_cold_starts":     pd.api.types.is_float_dtype,     # distributed cold starts PC (optional)
+    "LCV_cold_starts":    pd.api.types.is_float_dtype,     # distributed cold starts LCV (optional)
 }
 
 def check_restricted_input():
@@ -53,11 +53,30 @@ def check_geodata():
 def check_cleaned_location_dataset():
     return False
 
-def check_traffic_model():
-    return False
+def check_traffic_model(file_path = ""):
+    try:
+        df = gpd.read_file(file_path)
+    except Exception as e:
+        print(f"Error reading traffic model file: {e}")
+        return False
+    for col, dtype_fun in expected_traffic_model_format.items():
+        if col not in df.columns:
+            print(f"Missing column: {col}")
+            if(col in ["delta_PC", "delta_LCV", "delta_HGV", "PC_cold_starts", "LCV_cold_starts"]):
+                print(f"Note: Column {col} is optional and can be added later. Continuing with the check.")
+                continue
+            return False
+        if not dtype_fun(df[col]):
+            print(f"Incorrect dtype for column: {col}")
+    print("OK")
+    return True
 
-def check_counting_data():
-    df = pd.read_parquet(data_paths.COMBINED_COUNTING_DATA)
+def check_counting_data(file_path = ""):
+    try:
+        df = pd.read_parquet(file_path)
+    except Exception as e:
+        print(f"Error reading counting data file: {e}")
+        return False
     #df.info()
     for col, dtype_fun in expected_counting_data.items():
         if col not in df.columns:
@@ -74,3 +93,4 @@ def check_emission_factors():
 
 if __name__ == "__main__":
     check_counting_data()
+    check_traffic_model()

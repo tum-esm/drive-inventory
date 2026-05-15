@@ -1,0 +1,11 @@
+{
+  "hbefa_password": "",
+  "hbefa_username": "",
+  "traffic_model_path": "",
+  "cleaned_location_dataset_path": "",
+  "combined_counting_data_path": "",
+  "calendar_path": "",
+  "ef_hot_ts_path": "",
+  "ef_hot_agg_path": "",
+  "ef_cold_agg_path": ""
+}

@@ -1,10 +1,19 @@
 import sys
 import os
+import json
+import shutil
 from unittest import case
 import PySimpleGUI as sg
 from preprocessing import preprocess_bast_locations, preprocess_mst_locations, preprocess_bast_counting_data, preprocess_mst_counting_data, preprocess_2025_visum_model, combine_preprocessed_files
 from emission_calculation import calculate_hot_emissions, emission_gridding, calculate_cold_emissions, calculate_total_VKT, optimize_VCR_thresholds, calculate_detector_emissons
+from utils import check_files, data_paths
 from enum import Enum
+
+if not os.path.exists("config.json"):
+    shutil.copy("config.default.json", "config.json")
+    
+with open("config.json", "r") as f:
+    config = json.load(f)
 
 #States of the GUI
 class State(Enum):
@@ -59,10 +68,10 @@ pp_data_req_col = sg.Column(
 ec_data_req_col = sg.Column(
     [
         [sg.Text("Data Requirements:", key="dr_text")],
-        [sg.Text("Cleaned Location Dataset", size=(30,1)), sg.Input(key="ec_cld", enable_events=True), sg.FileBrowse()],
-        [sg.Text("Traffic Model", size=(30,1)), sg.Input(key="ec_tm", enable_events=True), sg.FileBrowse()],
-        [sg.Text("Traffic Counting Data", size=(30,1)), sg.Input(key="ec_cd", enable_events=True), sg.FileBrowse()],
-        [sg.Text("HBEFA Emission factors", size=(30,1)), sg.Input(key="ec_ef", enable_events=True), sg.FileBrowse()],
+        [sg.Text("Cleaned Location Dataset", size=(30,1)), sg.Input(key="ec_cld",default_text=config["cleaned_location_dataset_path"] ,enable_events=True), sg.FileBrowse(), sg.Button("Check", key="ec_cld_check")],
+        [sg.Text("Traffic Model", size=(30,1)), sg.Input(key="ec_tm", default_text=config["traffic_model_path"], enable_events=True), sg.FileBrowse(), sg.Button("Check", key="ec_tm_check")],
+        [sg.Text("Traffic Counting Data", size=(30,1)), sg.Input(key="ec_cd", default_text=config["combined_counting_data_path"], enable_events=True), sg.FileBrowse(), sg.Button("Check", key="ec_cd_check")],
+        [sg.Text("HBEFA Emission factors", size=(30,1)), sg.Input(key="ec_ef", enable_events=True), sg.FileBrowse(), sg.Button("Check", key="ec_ef_check")],
         [sg.Button("Return to main menu", key='ec_data_return')]
     ],
     key="ec_data_req_col",
@@ -142,26 +151,42 @@ def ec_data_requirements_screen():
             return
         if event == "ec_return":
             result = State.MAIN_MENU
-            break
         if event == "ec_cld":
             file_path = values["ec_cld"]
             print(file_path)
-            break
         if event == "ec_tm":
-            file_path = values["ec_tm"]
-            print(file_path)
-            break
+            config["traffic_model_path"] = values["ec_tm"]
+            print(config["traffic_model_path"])
         if event == "ec_cd":
-            file_path = values["ec_cd"]
-            print(file_path)
-            break
+            config["combined_counting_data_path"] = values["ec_cd"]
+            print(config["combined_counting_data_path"])
         if event == "ec_ef":
             file_path = values["ec_ef"]
             print(file_path)
-            break
         if event == "ec_data_return":
             result = State.MAIN_MENU
             break
+        if event == "ec_cld_check":
+            if check_files.check_cleaned_location_dataset():
+                sg.popup("Cleaned location dataset is valid.")
+            else:
+                sg.popup("Cleaned location dataset is invalid.")
+        if event == "ec_tm_check":
+            if check_files.check_traffic_model(config["traffic_model_path"]):
+                sg.popup("Traffic model is valid.")
+            else:
+                sg.popup("Traffic model is invalid.")
+        if event == "ec_cd_check":
+            if check_files.check_counting_data(config["combined_counting_data_path"]):
+                sg.popup("Counting data is valid.")
+            else:
+                sg.popup("Counting data is invalid.")
+        if event == "ec_ef_check":
+            if check_files.check_emission_factors():
+                sg.popup("Emission factors are valid.")
+            else:
+                sg.popup("Emission factors are invalid.")
+
     window["ec_data_req_col"].update(visible=False)
     return result
 
@@ -307,6 +332,8 @@ def emission_calculation_screen():
     return result
 
 if __name__ == "__main__":
+    print(config["ef_hot_agg_path"])
+    config["ef_hot_agg_path"] = "test"
     state = State.START
     while True:
         if state == State.EXIT:
@@ -327,5 +354,10 @@ if __name__ == "__main__":
             print("Invalid state.")
             break
     window.close()
+
+    # Save the config file
+    with open("config.json", "w") as f:
+        json.dump(config, f, indent=2)
+
     sys.exit()
     

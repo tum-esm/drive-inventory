@@ -63,6 +63,7 @@ ec_data_req_col = sg.Column(
         [sg.Text("Traffic Model", size=(30,1)), sg.Input(key="ec_tm", enable_events=True), sg.FileBrowse()],
         [sg.Text("Traffic Counting Data", size=(30,1)), sg.Input(key="ec_cd", enable_events=True), sg.FileBrowse()],
         [sg.Text("HBEFA Emission factors", size=(30,1)), sg.Input(key="ec_ef", enable_events=True), sg.FileBrowse()],
+        [sg.Button("Return to main menu", key='ec_data_return')]
     ],
     key="ec_data_req_col",
     visible=False
@@ -157,6 +158,9 @@ def ec_data_requirements_screen():
         if event == "ec_ef":
             file_path = values["ec_ef"]
             print(file_path)
+            break
+        if event == "ec_data_return":
+            result = State.MAIN_MENU
             break
     window["ec_data_req_col"].update(visible=False)
     return result

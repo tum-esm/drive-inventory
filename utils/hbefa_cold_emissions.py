@@ -35,7 +35,8 @@ class HbefaColdEmissions:
     def __init__(self, 
                  components : list = ['CO2(rep)', 'NOx', 'CO'],
                  vehicle_classes : list = _vehicle_classes,
-                 year: str = '2024'):
+                 year: str = '2024', 
+                 hbefa_version: int = 501006):
         """Load cold start emission factors from HBEFA excel file.
         Initilize for specific components.
         """
@@ -46,8 +47,9 @@ class HbefaColdEmissions:
         self.year = year
 
         self.emission_factors = self._import_hbefa_coldstart_ef(
-            data_paths.EF_PATH + f"{year}_start_aggregate_ts.parquet")
-        assert all([c in self.emission_factors.index.get_level_values('Component') for c in components]), "Not all components are available in the emission factor table. Please check the available components and adjust your selection accordingly."
+            data_paths.EF_PATH + f"{year}_start_aggregate_ts_hbefa{hbefa_version}.parquet")
+        assert all([c in self.emission_factors.index.get_level_values('Component') for c in components]),\
+            "Not all components are available in the emission factor table. Please check the available components and adjust your selection accordingly."
 
 
     def _import_hbefa_coldstart_ef(self,

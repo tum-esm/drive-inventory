@@ -82,7 +82,8 @@ class HbefaHotEmissions:
                  ef_type : Literal['EFA_weighted', 'EFA_WTT_weighted',
                                    'EFA_WTW_weighted'] = 'EFA_weighted',
                  area_type: Literal['Urban', 'Motorway', 'Rural'] = 'Urban',
-                 year: str = '2024'):
+                 year: str = '2024', 
+                 hbefa_version: int = 501006):
         """Imports emission factors from HBEFA-exported *.txt files and initializes 
         the class.
 
@@ -103,17 +104,20 @@ class HbefaHotEmissions:
         self.area_type = area_type
         self._vcr_thresholds = HbefaHotEmissions.default_vcr_thresholds
         self.year = year
+        self.hbefa_version = hbefa_version
 
         # load emission factors with explicit traffic situations
-        self.ef_dict = self._import_hbefa_ef(data_paths.EF_PATH  + f"{year}_hot_single_ts.parquet", 
+        
+        self.ef_dict = self._import_hbefa_ef(data_paths.EF_PATH  + f"{year}_hot_single_ts_hbefa{hbefa_version}.parquet", 
                                             columns_to_keep = ['Year', 'Component', 
                                                                'VehCat', 'TrafficSit',
                                                                'Gradient', 'EFA_weighted'], 
                                             index_cols = ['Year', 'TrafficSit','VehCat',
                                                           'Gradient','Component'])
+        
         #TODO: only load aggregated emission factors if they are needed for the calculation
         # load emission factors with aggregated traffic situations
-        self.ef_aggregated = self._import_hbefa_ef(data_paths.EF_PATH  + f"{year}_hot_aggregate_ts.parquet",
+        self.ef_aggregated = self._import_hbefa_ef(data_paths.EF_PATH  + f"{year}_hot_aggregate_ts_hbefa{hbefa_version}.parquet",
                                                 columns_to_keep= ['Year', 'Component',
                                                                   'VehCat', 'RoadCat',
                                                                   'EFA_weighted'],

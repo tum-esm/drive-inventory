@@ -162,7 +162,7 @@ class TrafficCounts:
 
     def _normalize_count(self,
                          df:pd.DataFrame) -> pd.DataFrame:
-        """Normalizes all complete counting time series to their 2019 weekday reference.
+        """Normalizes all complete counting time series to their weekday of the reference year.
         Args:
             df (pd.DataFrame): traffic counting data
         Returns:

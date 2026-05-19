@@ -19,7 +19,7 @@ TNO_100M_GRID  = abs_path + "/data/geodata/TNO_100m_grid_munich.gpkg"
 TNO_1km_GRID = abs_path + "/data/geodata/TNO_1km_grid_munich.gpkg"
 
 # traffic model
-VISUM_2019_FOLDER_PATH = abs_path + "/data/restricted_input/traffic_model/"
+VISUM_2019_FOLDER_PATH = abs_path + "/data/restricted_input/traffic_model_2019/"
 VISUM_2025_FOLDER_PATH = abs_path + "/data/restricted_input/traffic_model_2025/"
 
 # traffic counting data

@@ -5,6 +5,7 @@ temperature and hourly activity profiles.
 __version__ = 0.3
 __author__ = "Daniel Kühbacher"
 
+import math
 import pandas as pd
 from typing import Literal
 
@@ -36,8 +37,8 @@ class HbefaColdEmissions:
                  components : list = ['CO2(rep)', 'NOx', 'CO'],
                  vehicle_classes : list = _vehicle_classes,
                  year: str = '2024', 
-                 hbefa_version: int = 501006):
-        """Load cold start emission factors from HBEFA excel file.
+                 hbefa_version: int = 501007):
+        """Load cold start emission factors from the HBEFA parquet file in EF_PATH.
         Initilize for specific components.
         """
         assert all([c in HbefaColdEmissions._all_components for c in components])
@@ -47,38 +48,35 @@ class HbefaColdEmissions:
         self.year = year
 
         self.emission_factors = self._import_hbefa_coldstart_ef(
-            data_paths.EF_PATH + f"{year}_start_aggregate_ts_hbefa{hbefa_version}.parquet")
+            data_paths.EF_PATH + f"{year}_start_aggregate_ts_v{hbefa_version}.parquet")
         assert all([c in self.emission_factors.index.get_level_values('Component') for c in components]),\
             "Not all components are available in the emission factor table. Please check the available components and adjust your selection accordingly."
 
 
     def _import_hbefa_coldstart_ef(self,
                                    filepath: str) -> dict:
-        """Import cold start emission factors from HBEFA-exported *.XLS table
+        """Import cold start emission factors from HBEFA parquet table
         
         Args:
             filepath (str): path to emission factor table
             
         Returns:
-            dict: emission factors
+            pd.DataFrame: emission factors
+        
+        Raises:
+            FileNotFoundError: if the emission factor table does not exist
         """
         #TODO : Check if EFA is already weighted.
-        try:
-            ef = pd.read_parquet(filepath, columns= ['Vehicle category', 'Reference year', 'Pollutant',
-                                'Ambient cond. pattern', 'EFA'])
-            ef.rename(columns={'Vehicle category': 'VehCat', 'Reference year': 'Year', 'Pollutant': 'Component',
-                               'Ambient cond. pattern': 'AmbientCondPattern', 'EFA': 'EFA_weighted'}, inplace=True)
-            
-            # convert Vehicle Categorie to common acronym
-            ef['VehCat']= ef['VehCat'].map(HbefaColdEmissions._hbefa_raw_vehicle_classes)
-            ef = ef.set_index(['VehCat', 'Year','Component', 'AmbientCondPattern'])
-            print(f'Loaded emission factors from {filepath}')
-            return ef
-    
-        except Exception as e:
-            print(e)
-            print(f'Could not load table from {filepath}\n')
-            return None
+        ef = pd.read_parquet(filepath, columns= ['Vehicle category', 'Reference year', 'Pollutant',
+                            'Ambient cond. pattern', 'EFA'])
+        ef.rename(columns={'Vehicle category': 'VehCat', 'Reference year': 'Year', 'Pollutant': 'Component',
+                           'Ambient cond. pattern': 'AmbientCondPattern', 'EFA': 'EFA_weighted'}, inplace=True)
+        
+        # convert Vehicle Categorie to common acronym
+        ef['VehCat']= ef['VehCat'].map(HbefaColdEmissions._hbefa_raw_vehicle_classes)
+        ef = ef.set_index(['VehCat', 'Year','Component', 'AmbientCondPattern'])
+        print(f'Loaded emission factors from {filepath}')
+        return ef
 
 
     def _calc_ambient_condition_pattern(self,
@@ -90,7 +88,14 @@ class HbefaColdEmissions:
 
         Returns:
             str: Strint representing the ambient condition pattern
+
+        Raises:
+            ValueError: if the temperature is NaN or infinite
         """
+        # NaN would silently select the first bin (-10 °C), see audit §4 #1
+        if not math.isfinite(temperature):
+            raise ValueError(f'Invalid ambient temperature: {temperature}')
+
         # calculate closest temperature in HBEFA range
         hbefa_temperature = min(HbefaColdEmissions._temperature_range,
                                 key=lambda x: abs(x - temperature))

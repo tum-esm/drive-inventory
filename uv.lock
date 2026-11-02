@@ -331,7 +331,6 @@ dependencies = [
     { name = "geopandas" },
     { name = "ipython" },
     { name = "jupyter" },
-    { name = "lmu-meteo-api" },
     { name = "matplotlib" },
     { name = "nbstripout" },
     { name = "openpyxl" },
@@ -351,7 +350,6 @@ requires-dist = [
     { name = "geopandas", specifier = ">=1.0.1" },
     { name = "ipython", specifier = ">=9.0.2" },
     { name = "jupyter", specifier = ">=1.1.1" },
-    { name = "lmu-meteo-api", specifier = ">=1.0.0" },
     { name = "matplotlib", specifier = ">=3.10.1" },
     { name = "nbstripout", specifier = ">=0.9.1" },
     { name = "openpyxl", specifier = ">=3.1.5" },
@@ -889,20 +887,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/05/f9/27e94c1b3eb29e6933b6986ffc5fa1177d2cd1f0c8efc5f02c91c9ac61de/kiwisolver-1.4.8-cp313-cp313t-musllinux_1_2_ppc64le.whl", hash = "sha256:151dffc4865e5fe6dafce5480fab84f950d14566c480c08a53c663a0020504b6", size = 2390661, upload-time = "2024-12-24T18:30:34.939Z" },
     { url = "https://files.pythonhosted.org/packages/d9/d4/3c9735faa36ac591a4afcc2980d2691000506050b7a7e80bcfe44048daa7/kiwisolver-1.4.8-cp313-cp313t-musllinux_1_2_s390x.whl", hash = "sha256:577facaa411c10421314598b50413aa1ebcf5126f704f1e5d72d7e4e9f020d90", size = 2546710, upload-time = "2024-12-24T18:30:37.281Z" },
     { url = "https://files.pythonhosted.org/packages/4c/fa/be89a49c640930180657482a74970cdcf6f7072c8d2471e1babe17a222dc/kiwisolver-1.4.8-cp313-cp313t-musllinux_1_2_x86_64.whl", hash = "sha256:be4816dc51c8a471749d664161b434912eee82f2ea66bd7628bd14583a833e85", size = 2349213, upload-time = "2024-12-24T18:30:40.019Z" },
-]
-
-[[package]]
-name = "lmu-meteo-api"
-version = "1.0.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "numpy" },
-    { name = "pandas" },
-    { name = "requests" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/10/19/ed0728ea1fbe2cab9aea239547951753e013613c8b2ab4c74ce140fc9969/lmu_meteo_api-1.0.0.tar.gz", hash = "sha256:0b53fa5156bc12550cdd9cf0624e4aee6a4b03e500fc72eae505601ab525ad77", size = 123944, upload-time = "2026-03-11T08:34:22.378Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/48/91/ed27139fb64780ecec061fa0a9df744c2cc9dfa9a68fcf891b35d3e5002b/lmu_meteo_api-1.0.0-py3-none-any.whl", hash = "sha256:35559e9125236b1cdf9b5fc0d2fea165faa31c66bf1db70554b0503c527c38da", size = 2890, upload-time = "2026-03-11T08:28:35.873Z" },
 ]
 
 [[package]]

@@ -1,0 +1,23 @@
+# DRIVE run configuration: Munich, 2025 traffic model.
+# Relative paths: data_root relative to this file, everything else relative to data_root.
+
+paths:
+  data_root: ../data
+  store: restricted_input/drive.duckdb
+
+ingest:
+  # Preprocessed counting data (outputs of data_preprocessing/11 and 12), one entry per file.
+  # traffic_model = the VISUM model whose road_link_ids the file's QGIS matching refers to.
+  counts:
+    - source: LHM
+      path: restricted_input/counting_data/lhm/LHM_TrafficCounts_preprocessed.parquet
+      traffic_model: visum2025
+    - source: BASt
+      path: restricted_input/counting_data/bast/BAST_TrafficCounts_preprocessed.parquet
+      traffic_model: visum2025
+    - source: LHM
+      path: restricted_input/counting_data/lhm/MST_TrafficCounts_preprocessed_from2018.parquet
+      traffic_model: visum2019
+    - source: BASt
+      path: restricted_input/counting_data/bast/BAST_TrafficCounts_preprocessed_from2018.parquet
+      traffic_model: visum2019

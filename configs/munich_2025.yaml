@@ -4,6 +4,7 @@
 paths:
   data_root: ../data
   store: restricted_input/drive.duckdb
+  calendar: auxiliary/calender_18to26.xlsx
 
 # VISUM models; counter -> link matchings are stored per model for links that exist in it
 traffic_models:
@@ -20,3 +21,27 @@ ingest:
       path: restricted_input/counting_data/lhm/MST_TrafficCounts_preprocessed_from2018.parquet
     - source: BASt
       path: restricted_input/counting_data/bast/BAST_TrafficCounts_preprocessed_from2018.parquet
+
+run:
+  traffic_model: visum2025
+  reference_year: 2025
+  reference_day_type: 0    # normweekday
+  data_version: null       # latest store batch; set a batch id to reproduce a run
+
+# Counts quality control (v1 data_preprocessing/31 settings)
+counts_qa:
+  period_start: 2018-01-01
+  period_end: 2025-12-31
+  completeness_window: [2025-01-01, 2025-12-31]
+  hourly_daily_tolerance: 0.025
+  min_daily_value: 1
+  outlier_z_threshold: 3.5
+  sqv_f: 10000
+  sqv_threshold: 0.6
+  completeness_threshold: 0.6
+  iqr_range: [2.5, 97.5]
+
+# Road types with too few counting stations are scaled like Distributor/Secondary
+scaling_road_types:
+  Access-residential: Distributor/Secondary
+  TrunkRoad/Primary-National: Distributor/Secondary

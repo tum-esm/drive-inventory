@@ -35,6 +35,30 @@ RAW_COUNTS = pa.DataFrameSchema(
     coerce=True,
 )
 
+LINK_VEHICLE_CLASSES = ['PC', 'LCV', 'HGV', 'MOT', 'BUS', 'SUM']
+
+# Quality-controlled daily volumes per road link (output of domain.counts_qa)
+LINK_COUNTS = pa.DataFrameSchema(
+    {
+        'road_link_id': pa.Column('int64'),
+        'vehicle_class': pa.Column(str, pa.Check.isin(LINK_VEHICLE_CLASSES)),
+        'date': pa.Column('datetime64[us]'),
+        'road_type': pa.Column(str),
+        'scaling_road_type': pa.Column(str),
+        'day_type': pa.Column('int64', pa.Check.isin([0, 1, 2, 3, 4])),
+        'sqv': pa.Column(float, pa.Check.in_range(0, 1), nullable=True),
+        'valid': pa.Column(bool),
+        'completeness': pa.Column(float, pa.Check.in_range(0, 1)),
+        'complete': pa.Column(bool),
+        'daily_value': pa.Column(float, pa.Check.gt(0)),
+        **{h: pa.Column(float, _non_negative) for h in HOURS},
+    },
+    unique=['road_link_id', 'vehicle_class', 'date'],
+    strict=True,
+    ordered=True,
+    coerce=True,
+)
+
 COUNTER_LINKS = pa.DataFrameSchema(
     {
         'source': pa.Column(str, pa.Check.isin(COUNT_SOURCES)),

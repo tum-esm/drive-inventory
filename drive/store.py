@@ -155,9 +155,23 @@ def _read_latest(store: Path, table: str, version: int, where: str = '', params:
         return con.execute(query, [version] + (params or [])).df()
 
 
-def read_counts(store: Path, data_version: DataVersion = None) -> pd.DataFrame:
-    """Raw counts per detector (contract drive.schemas.RAW_COUNTS plus batch_id), latest batch per key."""
-    return _read_latest(store, 'counts', resolve_version(store, data_version))
+def read_counts(store: Path,
+                data_version: DataVersion = None,
+                metric: str | None = None,
+                start: str | None = None,
+                end: str | None = None) -> pd.DataFrame:
+    """Raw counts per detector (contract drive.schemas.RAW_COUNTS plus batch_id), latest batch per key.
+
+    Args:
+        metric: only this metric ('volume' or 'speed')
+        start, end: only dates in [start, end] (ISO dates, inclusive)
+    """
+    where, params = '', []
+    for clause, value in [('metric = ?', metric), ('date >= ?', start), ('date <= ?', end)]:
+        if value is not None:
+            where += f' AND {clause}'
+            params.append(value)
+    return _read_latest(store, 'counts', resolve_version(store, data_version), where, params)
 
 
 def read_counter_links(store: Path, traffic_model: str, data_version: DataVersion = None) -> pd.DataFrame:

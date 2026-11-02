@@ -5,11 +5,12 @@ Relative paths are resolved as follows:
 - every other path relative to `paths.data_root`
 """
 
+import re
 from pathlib import Path
 from typing import Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, model_validator
 
 TrafficModel = str  # e.g. 'visum2019', 'visum2025'; link ids are only unique within one model
 
@@ -23,11 +24,14 @@ class PathsConfig(_Strict):
     store: Path = Path('restricted_input/drive.duckdb')
 
 
+class TrafficModelConfig(_Strict):
+    links: Path  # preprocessed VISUM links (visum_links_<year>.gpkg)
+
+
 class CountsSource(_Strict):
-    """One preprocessed counting data file and the traffic model its road_link_ids refer to."""
+    """One preprocessed counting data file (detector -> road_link_id matching included)."""
     source: Literal['BASt', 'LHM']
     path: Path
-    traffic_model: TrafficModel = Field(pattern=r'^visum\d{4}$')
 
 
 class IngestConfig(_Strict):
@@ -36,14 +40,20 @@ class IngestConfig(_Strict):
 
 class DriveConfig(_Strict):
     paths: PathsConfig
+    traffic_models: dict[TrafficModel, TrafficModelConfig] = {}
     ingest: IngestConfig = IngestConfig()
 
     @model_validator(mode='after')
-    def _resolve_paths(self) -> 'DriveConfig':
+    def _check_and_resolve(self) -> 'DriveConfig':
         root = self.paths.data_root
         if not root.is_absolute():
             raise ValueError('paths.data_root must be resolved before validation, use load_config()')
+        bad = [m for m in self.traffic_models if not re.fullmatch(r'visum\d{4}', m)]
+        if bad:
+            raise ValueError(f'traffic model names must look like visum<year>, got {bad}')
         self.paths.store = root / self.paths.store
+        for m in self.traffic_models.values():
+            m.links = root / m.links
         for c in self.ingest.counts:
             c.path = root / c.path
         return self

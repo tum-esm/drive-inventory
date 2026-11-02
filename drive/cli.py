@@ -3,17 +3,36 @@
 import argparse
 import sys
 
-from drive import __version__
+from drive import __version__, store
 from drive.config import load_config
+from drive.io.counts_preprocessed import read_preprocessed_counts
+from drive.io.visum import read_link_ids
 
 
 def _ingest_counts(args: argparse.Namespace) -> int:
     config = load_config(args.config)
+    if not config.traffic_models:
+        raise ValueError('No traffic_models in the config, counter links need at least one')
     print(f'Store: {config.paths.store}')
+    model_link_ids = {m: read_link_ids(c.links) for m, c in config.traffic_models.items()}
+    params = {'traffic_models': sorted(model_link_ids)}
+
     for c in config.ingest.counts:
-        print(f'  {c.source:4s} {c.traffic_model}  {c.path}')
-    print('Counts ingest is not implemented yet.', file=sys.stderr)
-    return 1
+        sha = store.file_sha256(c.path)
+        existing = store.find_batch(config.paths.store, 'counts', sha, params)
+        if existing is not None:
+            print(f'{c.source}: {c.path.name} already ingested as batch {existing}, skipped')
+            continue
+        counts, links, report = read_preprocessed_counts(c.path, c.source, model_link_ids)
+        batch = store.write_batch(config.paths.store, 'counts', c.source, c.path, sha, params,
+                                  {'counts': counts, 'counter_links': links},
+                                  note='interim adapter counts_preprocessed (v1 preprocessing 11/12)')
+        print(f'{c.source}: {c.path.name} -> batch {batch}: {report.rows} rows, {report.detectors} detectors '
+              f'({report.detectors_without_link} without link), {report.missing_marker_rows} rows with '
+              f'missing-value markers set to NaN')
+        for model, missing in report.links_missing_in_model.items():
+            print(f'    {model}: {len(missing)} matched links not in the model {missing[:20]}')
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:

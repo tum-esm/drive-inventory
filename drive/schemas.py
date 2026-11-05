@@ -59,6 +59,43 @@ LINK_COUNTS = pa.DataFrameSchema(
     coerce=True,
 )
 
+EF_KEY = ['hbefa_version', 'reference_year', 'emission_category', 'aggregation', 'pollutant', 'process_scope',
+          'vehicle_class', 'traffic_situation', 'gradient', 'ambient_pattern']
+
+# HBEFA emission factors, one row per key. `efa` is fleet-weighted, in `ef_unit` (cold-start
+# excess factors can be negative). Start tables have no traffic situation, only single_ts
+# tables have a gradient, and only the 2019 and 2020 tables have a process scope (TTW, WTT).
+EMISSION_FACTORS = pa.DataFrameSchema(
+    {
+        'hbefa_version': pa.Column('int64'),
+        'reference_year': pa.Column('int64'),
+        'emission_category': pa.Column(str, pa.Check.isin(['hot', 'start'])),
+        'aggregation': pa.Column(str, pa.Check.isin(['single_ts', 'aggregate_ts'])),
+        'pollutant': pa.Column(str),
+        'process_scope': pa.Column(str, nullable=True),
+        'vehicle_class': pa.Column(str, pa.Check.isin(['PC', 'LCV', 'HGV', 'MOT', 'BUS'])),
+        'traffic_situation': pa.Column(str, nullable=True),
+        'gradient': pa.Column(str, nullable=True),
+        'ambient_pattern': pa.Column(str),
+        'road_category': pa.Column(str),
+        'ef_unit': pa.Column(str, pa.Check.isin(['g/vehkm', 'g/start'])),
+        'weight': pa.Column(float),
+        'efa': pa.Column(float),
+        'efa_0': pa.Column(float, nullable=True),
+        'efa_100': pa.Column(float, nullable=True),
+        'speed': pa.Column(float),
+        'speed_0': pa.Column(float, nullable=True),
+        'speed_100': pa.Column(float, nullable=True),
+        'cum_mileage': pa.Column(float, nullable=True),
+        'traffic_scenario': pa.Column(str),
+        'country': pa.Column(str),
+    },
+    unique=EF_KEY,
+    strict=True,
+    ordered=True,
+    coerce=True,
+)
+
 COUNTER_LINKS = pa.DataFrameSchema(
     {
         'source': pa.Column(str, pa.Check.isin(COUNT_SOURCES)),

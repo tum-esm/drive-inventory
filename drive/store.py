@@ -16,7 +16,7 @@ from pathlib import Path
 import duckdb
 import pandas as pd
 
-from drive.schemas import COUNT_KEY, HOURS
+from drive.schemas import COUNT_KEY, EF_KEY, HOURS
 
 DataVersion = int | datetime | None
 
@@ -51,12 +51,38 @@ CREATE TABLE IF NOT EXISTS counter_links (
     traffic_model VARCHAR NOT NULL,
     road_link_id  BIGINT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS emission_factors (
+    batch_id          BIGINT NOT NULL,
+    hbefa_version     BIGINT NOT NULL,
+    reference_year    BIGINT NOT NULL,
+    emission_category VARCHAR NOT NULL,
+    aggregation       VARCHAR NOT NULL,
+    pollutant         VARCHAR NOT NULL,
+    process_scope     VARCHAR,
+    vehicle_class     VARCHAR NOT NULL,
+    traffic_situation VARCHAR,
+    gradient          VARCHAR,
+    ambient_pattern   VARCHAR NOT NULL,
+    road_category     VARCHAR NOT NULL,
+    ef_unit           VARCHAR NOT NULL,
+    weight            DOUBLE NOT NULL,
+    efa               DOUBLE NOT NULL,
+    efa_0             DOUBLE,
+    efa_100           DOUBLE,
+    speed             DOUBLE NOT NULL,
+    speed_0           DOUBLE,
+    speed_100         DOUBLE,
+    cum_mileage       DOUBLE,
+    traffic_scenario  VARCHAR NOT NULL,
+    country           VARCHAR NOT NULL
+);
 """
 
 # table -> key that identifies a row across batches (latest batch wins)
 _KEYS = {
     'counts': COUNT_KEY,
     'counter_links': ['source', 'detector_id', 'traffic_model'],
+    'emission_factors': EF_KEY,
 }
 
 
@@ -178,6 +204,35 @@ def read_counter_links(store: Path, traffic_model: str, data_version: DataVersio
     """Detector -> road link mapping of one traffic model, latest batch per detector."""
     return _read_latest(store, 'counter_links', resolve_version(store, data_version),
                         'AND traffic_model = ?', [traffic_model])
+
+
+def read_emission_factors(store: Path,
+                          hbefa_version: int,
+                          reference_year: int,
+                          emission_category: str,
+                          aggregation: str,
+                          pollutants: list[str] | None = None,
+                          data_version: DataVersion = None) -> pd.DataFrame:
+    """One emission factor table (contract drive.schemas.EMISSION_FACTORS plus batch_id), latest batch per key.
+
+    Raises:
+        ValueError: if the table or one of the pollutants is not in the store
+    """
+    table = f'{reference_year} {emission_category} {aggregation} of HBEFA version {hbefa_version}'
+    where = 'AND hbefa_version = ? AND reference_year = ? AND emission_category = ? AND aggregation = ?'
+    try:
+        df = _read_latest(store, 'emission_factors', resolve_version(store, data_version), where,
+                          [hbefa_version, reference_year, emission_category, aggregation])
+    except duckdb.CatalogException as error:
+        raise ValueError(f'No emission factors in {store}, run `drive ingest hbefa` first') from error
+    if df.empty:
+        raise ValueError(f'No emission factor table {table} in {store}')
+    if pollutants is not None:
+        missing = sorted(set(pollutants) - set(df['pollutant']))
+        if missing:
+            raise ValueError(f'Emission factor table {table} lacks the pollutants {missing}')
+        df = df[df['pollutant'].isin(pollutants)].reset_index(drop=True)
+    return df
 
 
 def read_batches(store: Path) -> pd.DataFrame:

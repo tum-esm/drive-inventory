@@ -5,6 +5,7 @@ import sys
 
 from drive import __version__, store
 from drive.config import load_config
+from drive.io import hbefa
 from drive.io.counts_preprocessed import read_preprocessed_counts
 from drive.io.visum import read_link_ids
 
@@ -35,6 +36,24 @@ def _ingest_counts(args: argparse.Namespace) -> int:
     return 0
 
 
+def _ingest_hbefa(args: argparse.Namespace) -> int:
+    config = load_config(args.config)
+    if config.ingest.hbefa is None:
+        raise ValueError('No ingest.hbefa section in the config')
+    print(f'Store: {config.paths.store}')
+    for file in hbefa.find_files(config.ingest.hbefa.directory, config.ingest.hbefa.version):
+        sha = store.file_sha256(file.path)
+        existing = store.find_batch(config.paths.store, 'emission_factors', sha, {})
+        if existing is not None:
+            print(f'{file.path.name} already ingested as batch {existing}, skipped')
+            continue
+        table = hbefa.read_table(file)
+        batch = store.write_batch(config.paths.store, 'emission_factors', 'HBEFA', file.path, sha, {},
+                                  {'emission_factors': table})
+        print(f'{file.path.name} -> batch {batch}: {len(table)} rows')
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog='drive', description='DRIVE road transport emission inventory')
     parser.add_argument('--version', action='version', version=f'drive {__version__}')
@@ -45,6 +64,9 @@ def main(argv: list[str] | None = None) -> int:
     counts = sources.add_parser('counts', help='traffic counts listed under ingest.counts')
     counts.add_argument('config', help='path to the run configuration (YAML)')
     counts.set_defaults(func=_ingest_counts)
+    ef = sources.add_parser('hbefa', help='emission factor tables in ingest.hbefa.directory')
+    ef.add_argument('config', help='path to the run configuration (YAML)')
+    ef.set_defaults(func=_ingest_hbefa)
 
     args = parser.parse_args(argv)
     return args.func(args)

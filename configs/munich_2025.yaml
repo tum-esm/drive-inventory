@@ -21,12 +21,17 @@ ingest:
       path: restricted_input/counting_data/lhm/MST_TrafficCounts_preprocessed_from2018.parquet
     - source: BASt
       path: restricted_input/counting_data/bast/BAST_TrafficCounts_preprocessed_from2018.parquet
+  # Emission factor tables named {year}_{category}_{aggregation}_v{version}.parquet
+  hbefa:
+    directory: restricted_input/hbefa
+    version: 501007
 
 run:
   traffic_model: visum2025
   reference_year: 2025
   reference_day_type: 0    # normweekday
   data_version: null       # latest store batch; set a batch id to reproduce a run
+  hbefa_version: 501007
 
 # Counts quality control (v1 data_preprocessing/31 settings)
 counts_qa:

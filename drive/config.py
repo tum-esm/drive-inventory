@@ -36,8 +36,15 @@ class CountsSource(_Strict):
     path: Path
 
 
+class HbefaIngest(_Strict):
+    """Directory with emission factor tables, see io.hbefa for the naming scheme."""
+    directory: Path
+    version: int  # e.g. 501007
+
+
 class IngestConfig(_Strict):
     counts: list[CountsSource] = []
+    hbefa: HbefaIngest | None = None
 
 
 class RunConfig(_Strict):
@@ -45,6 +52,7 @@ class RunConfig(_Strict):
     reference_year: int  # normalisation year of the scaling, must match the traffic model year
     reference_day_type: int = 0  # normweekday
     data_version: int | datetime | None = None  # store batch id or tz-aware timestamp, None = latest
+    hbefa_version: int | None = None  # the emission factors a run reads from the store
 
 
 class CountsQAConfig(_Strict):
@@ -85,6 +93,8 @@ class DriveConfig(_Strict):
             m.links = root / m.links
         for c in self.ingest.counts:
             c.path = root / c.path
+        if self.ingest.hbefa is not None:
+            self.ingest.hbefa.directory = root / self.ingest.hbefa.directory
         return self
 
 

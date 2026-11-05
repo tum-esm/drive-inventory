@@ -4,6 +4,7 @@ import pandas as pd
 
 from drive import store
 from drive.config import DriveConfig
+from drive.domain.activity import Activity
 from drive.domain.calendar import combined_day_types
 from drive.domain.counts_qa import QAParams, QAReport, link_volumes, qa_link_counts
 from drive.io.calendar_excel import read_calendar
@@ -52,3 +53,15 @@ def load_link_counts(config: DriveConfig) -> tuple[pd.DataFrame, QAReport, int]:
     volume = link_volumes(raw, links, attributes, load_day_types(config))
     link_counts, report = qa_link_counts(volume, attributes, params)
     return link_counts, report, version
+
+
+def load_activity(config: DriveConfig) -> tuple[Activity, QAReport, int]:
+    """Traffic activity of the run: store -> counts QA -> Activity.
+
+    Returns:
+        activity, QA report, and the store batch id the data was read at
+    """
+    run, _ = _require(config)
+    link_counts, report, version = load_link_counts(config)
+    activity = Activity(link_counts, load_day_types(config), run.reference_year, run.reference_day_type)
+    return activity, report, version

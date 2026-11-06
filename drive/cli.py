@@ -102,7 +102,8 @@ def _run(args: argparse.Namespace) -> int:
     results = hot_results(run)
     profile = hot_profile(run, config)
     config.paths.results.mkdir(parents=True, exist_ok=True)
-    stem = f'{config.run.traffic_model}_{config.run.start.year}_hbefa{config.run.hbefa_version}_batch{run.version}'
+    mode = '_aggregated' if config.run.hot_mode == 'aggregated' else ''
+    stem = f'{config.run.traffic_model}_{config.run.start.year}_hbefa{config.run.hbefa_version}_batch{run.version}{mode}'
     name = f'hot_{stem}.parquet'
     results.to_parquet(config.paths.results / name)
     profile.to_parquet(config.paths.results / f'hot_profile_{stem}.parquet')

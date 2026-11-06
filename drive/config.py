@@ -78,6 +78,7 @@ class RunConfig(_Strict):
     vehicle_classes: list[str] = []
     components: list[str] = []
     hot_ambient_pattern: str | None = None  # the HBEFA pattern of the hot factors (R33: fixed for now)
+    hot_mode: Literal['los_specific', 'aggregated'] = 'los_specific'  # traffic situation per link and hour, or one mean
     area_type: Literal['Urban', 'Motorway', 'Rural'] = 'Urban'
 
 

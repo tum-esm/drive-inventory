@@ -11,8 +11,8 @@ from drive.config import DriveConfig
 from drive.domain.activity import Activity
 from drive.domain.calendar import combined_day_types
 from drive.domain.counts_qa import QAParams, QAReport, link_attributes, link_volumes, qa_link_counts
-from drive.domain.kernel import (EfTable, HotEmissions, KernelParams, build_ef_table, hot_emissions, profile_frame,
-                                 scaling_factors, share_corrections)
+from drive.domain.kernel import (EfTable, HotEmissions, KernelParams, build_aggregated_ef_table, build_ef_table,
+                                 hot_emissions, profile_frame, share_corrections)
 from drive.io.calendar_excel import read_calendar
 
 
@@ -34,13 +34,16 @@ def kernel_params(config: DriveConfig) -> KernelParams:
 
 
 def load_hot_factors(config: DriveConfig, year: int, version: int) -> pd.DataFrame:
-    """Hot emission factors of one year, level-of-service specific, for the run's ambient pattern."""
+    """Hot emission factors of one year for the run's mode, ambient pattern and area type."""
     run, _ = _require(config)
     if run.hbefa_version is None or run.hot_ambient_pattern is None:
         raise ValueError('The config needs run.hbefa_version and run.hot_ambient_pattern')
-    factors = store.read_emission_factors(config.paths.store, run.hbefa_version, year, 'hot', 'single_ts',
+    aggregation = 'aggregate_ts' if run.hot_mode == 'aggregated' else 'single_ts'
+    factors = store.read_emission_factors(config.paths.store, run.hbefa_version, year, 'hot', aggregation,
                                           run.components, version)
     selected = factors[factors['ambient_pattern'] == run.hot_ambient_pattern]
+    if run.hot_mode == 'aggregated':
+        selected = selected[selected['road_category'] == run.area_type]
     if selected.empty:
         raise ValueError(f'No {year} hot factors with the ambient pattern {run.hot_ambient_pattern}')
     return selected
@@ -138,7 +141,9 @@ def compute_hot_emissions(config: DriveConfig) -> HotRun:
     params = kernel_params(config)
     corrections = share_corrections(links, activity.vehicle_shares, load_day_types(config), run.reference_year,
                                     run.reference_day_type)
-    ef = build_ef_table(links, load_hot_factors(config, run.start.year, version), params)
+    factors = load_hot_factors(config, run.start.year, version)
+    ef = build_aggregated_ef_table(links, factors, params) if run.hot_mode == 'aggregated' \
+        else build_ef_table(links, factors, params)
     seconds['links and factors'] = time.perf_counter() - start
 
     start = time.perf_counter()

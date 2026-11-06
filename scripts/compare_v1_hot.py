@@ -10,6 +10,9 @@ Usage: uv run python scripts/compare_v1_hot.py [configs/munich_2025.yaml]
 2. Full chain from the store: clipped links must match the baseline row by row. Emissions may
    differ only through the known count differences (BASt -1 markers, compare_v1_counts.py), so
    the differences are reported per road type, vehicle class and component.
+3. Without the links with markers, the chain and v1's counts must give the same emissions.
+4. Aggregated mode: as in 1 and 2, against v1's aggregated line source. It doesn't use gradients,
+   so the v1.1-asis file is still valid after the gradient fix.
 """
 
 import sys
@@ -26,7 +29,8 @@ from compare_v1_counts import load_v1, marker_link_classes  # noqa: E402
 from drive import store  # noqa: E402
 from drive.config import load_config  # noqa: E402
 from drive.domain.activity import Activity  # noqa: E402
-from drive.domain.kernel import (build_ef_table, hot_emissions, profile_frame, scaling_factors,  # noqa: E402
+from drive.domain.kernel import (build_aggregated_ef_table, build_ef_table, hot_emissions,  # noqa: E402
+                                 profile_frame, scaling_factors,
                                  share_corrections)
 from drive.pipeline import (compute_hot_emissions, kernel_params, load_day_types, load_hot_factors,  # noqa: E402
                             load_link_counts)
@@ -34,6 +38,7 @@ from drive.pipeline import (compute_hot_emissions, kernel_params, load_day_types
 BASELINE = 'inventory/baselines/v1.3-gradientfix/linesource_Munich_2025_hbefa501007_specific_visum2025.gpkg'
 YEAR = 2025
 RTOL, ATOL = 1e-9, 1e-9
+AGGREGATED_BASELINE = 'inventory/baselines/v1.1-asis/linesource_Munich_2025_hbefa501007_aggregated_visum2025.gpkg'
 V1_PROFILE = 'inventory/baselines/v1.1-asis/GNFR_F_hot_timeprofile_2025.csv'
 # a normal weekday, a Saturday, a Sunday and a day in the summer vacation
 PROFILE_DAYS = ['2025-03-04', '2025-03-08', '2025-03-09', '2025-08-13']
@@ -207,6 +212,39 @@ def check_markers(config, params, baseline: pd.DataFrame) -> bool:
     return not different.any()
 
 
+def check_aggregated(config, params) -> bool:
+    baseline = gpd.read_file(config.paths.data_root / AGGREGATED_BASELINE)
+    config = config.model_copy(deep=True)
+    config.run.hot_mode = 'aggregated'
+    run = config.run
+    version = store.resolve_version(config.paths.store, run.data_version)
+    activity = Activity(load_v1(config.paths.data_root), load_day_types(config), run.reference_year, run.reference_day_type)
+    ef = build_aggregated_ef_table(baseline, load_hot_factors(config, YEAR, version), params)
+    dates = pd.date_range(f'{YEAR}-01-01', f'{YEAR}-12-31')
+    start = time.perf_counter()
+    result = hot_emissions(baseline, baseline[['hgv_corr', 'lcv_corr']], activity, dates, ef, params)
+    seconds = time.perf_counter() - start
+    columns = result.emissions.columns
+    new, old = result.emissions.to_numpy(), baseline[columns].to_numpy()
+    different = ~np.isclose(new, old, rtol=RTOL, atol=ATOL)
+    relative = np.abs(new - old) / np.where(old == 0, np.nan, np.abs(old))
+    print(f'On v1 inputs: {different.sum()} of {new.size} values differ, largest relative difference '
+          f'{np.nanmax(relative):.2e}; {seconds:.1f} s')
+
+    chain = compute_hot_emissions(config)
+    same_rows = len(chain.links) == len(baseline) and (chain.links['road_link_id'].to_numpy() == baseline['road_link_id'].to_numpy()).all()
+    length = chain.links.length.to_numpy() / 1000
+    totals = (chain.hot.emissions.to_numpy() * length[:, None]).sum(axis=0) / (old * length[:, None]).sum(axis=0) - 1
+    zero = np.isnan(totals)
+    print(f'From the store: same rows {bool(same_rows)}, largest change in totals per class x component '
+          f'{np.nanmax(np.abs(totals)) * 100:.5f} %, {int(zero.sum())} columns are zero in both')
+    profile_total = chain.hot.profiles['length_km'].sum(axis=(0, 1)).ravel()
+    annual = (chain.hot.emissions.to_numpy() * length[:, None]).sum(axis=0)
+    sums = bool(np.isclose(profile_total, annual, rtol=RTOL, atol=ATOL).all())
+    print(f'Profile sums to the annual totals: {sums}')
+    return not different.any() and bool(same_rows) and bool(np.nanmax(np.abs(totals)) * 100 <= CHAIN_LIMIT_PERCENT) and sums
+
+
 def main(config_path: str = 'configs/munich_2025.yaml') -> int:
     config = load_config(config_path)
     params = kernel_params(config)
@@ -218,8 +256,10 @@ def main(config_path: str = 'configs/munich_2025.yaml') -> int:
     chain_ok = check_chain(config, baseline)
     print(f'Chain: {"OK" if chain_ok else "DIFFERENT"}\n\n3. Are the BASt markers the only cause?')
     markers_ok = check_markers(config, params, baseline)
-    print(f'Markers: {"OK" if markers_ok else "DIFFERENT"}')
-    return 0 if kernel_ok and chain_ok and markers_ok else 1
+    print(f'Markers: {"OK" if markers_ok else "DIFFERENT"}\n\n4. Aggregated mode')
+    aggregated_ok = check_aggregated(config, params)
+    print(f'Aggregated: {"OK" if aggregated_ok else "DIFFERENT"}')
+    return 0 if kernel_ok and chain_ok and markers_ok and aggregated_ok else 1
 
 
 if __name__ == '__main__':

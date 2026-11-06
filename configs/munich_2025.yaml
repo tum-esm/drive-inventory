@@ -67,6 +67,7 @@ run:
   components: [CO, NOx, NO2, CO2(rep), CO2(total), PM10-ex, CH4, PM10-nx, PM2.5-ex, BC-ex, PM2.5-nx, BC-nx]
   hot_ambient_pattern: T+25°C,tØ,dØ    # v1 behaviour, R33 will select it by temperature
   area_type: Urban
+  hot_mode: los_specific               # or aggregated: one mean factor (tables for 2024 and 2025 only)
 
 # Hot emission kernel: limits of the volume/capacity ratio per LOS class (tuned by v1 notebook 01), HBS 2015 car units
 kernel:

@@ -156,6 +156,35 @@ def build_ef_table(links: pd.DataFrame, factors: pd.DataFrame, params: KernelPar
     return EfTable(by_group, group_of_link['_group'].to_numpy(), codes, list(road_types))
 
 
+def build_aggregated_ef_table(links: pd.DataFrame, factors: pd.DataFrame, params: KernelParams) -> EfTable:
+    """Emission factors from aggregated traffic situations: one factor per vehicle class and component.
+
+    All LOS classes of a link get the same factor, so the kernel needs no separate path. Links
+    are grouped by road type to keep the road types in the profiles. Gradient and speed play no role.
+
+    Args:
+        links: road_type per link
+        factors: vehicle_class, pollutant, efa of one road category and ambient pattern
+
+    Raises:
+        ValueError: if a factor key has several rows, or a factor doesn't exist
+    """
+    key = ['vehicle_class', 'pollutant']
+    duplicates = factors.duplicated(key)
+    if duplicates.any():
+        raise ValueError(f'{duplicates.sum()} rows repeat a factor key, e.g.\n{factors.loc[duplicates, key].head(3)}')
+    wanted = pd.MultiIndex.from_product([params.vehicle_classes, params.components], names=key)
+    values = factors.set_index(key)['efa'].reindex(wanted)
+    if values.isna().any():
+        missing = values.index[values.isna()]
+        raise ValueError(f'No emission factor for {len(missing)} keys, e.g. {list(missing[:3])}')
+
+    group_of_link, road_types = pd.factorize(links['road_type'])
+    matrix = values.to_numpy().reshape(len(params.vehicle_classes), len(params.components))
+    by_group = np.broadcast_to(matrix, (len(road_types), N_LOS) + matrix.shape).copy()
+    return EfTable(by_group, group_of_link, np.arange(len(road_types)), list(road_types))
+
+
 def _day_inputs(activity: Activity,
                 date: pd.Timestamp,
                 road_types: list[str],
@@ -183,13 +212,13 @@ def hot_emissions(links: pd.DataFrame,
                   ef: EfTable,
                   params: KernelParams,
                   profile_weights: dict[str, np.ndarray] | None = None) -> HotEmissions:
-    """Hot emissions per link over the given dates, level-of-service specific.
+    """Hot emissions per link over the given dates.
 
     Args:
         links: dtv_SUM, scaling_road_type, road_type, hour_capacity per link
         corrections: see share_corrections
         dates: the days to sum, usually one year
-        ef: see build_ef_table, for the same links
+        ef: see build_ef_table (level-of-service specific) or build_aggregated_ef_table, for the same links
         profile_weights: name -> weight per link. Each gives an hourly profile, the sum of
             g/km x weight per road type. Link length in km gives emissions in g.
 

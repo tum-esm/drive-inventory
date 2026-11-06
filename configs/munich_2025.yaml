@@ -59,6 +59,22 @@ run:
   reference_day_type: 0    # normweekday
   data_version: null       # latest store batch; set a batch id to reproduce a run
   hbefa_version: 501007
+  vehicle_classes: [PC, LCV, HGV, BUS, MOT]
+  components: [CO, NOx, NO2, CO2(rep), CO2(total), PM10-ex, CH4, PM10-nx, PM2.5-ex, BC-ex, PM2.5-nx, BC-nx]
+  hot_ambient_pattern: T+25°C,tØ,dØ    # v1 behaviour, R33 will select it by temperature
+  area_type: Urban
+
+# Hot emission kernel: limits of the volume/capacity ratio per LOS class (tuned by v1 notebook 01), HBS 2015 car units
+kernel:
+  vcr_thresholds:
+    Motorway-Nat: [0.5, 0.71, 0.98, 1.1]
+    Motorway-City: [0.55, 0.75, 0.9, 1]              # not used
+    TrunkRoad/Primary-National: [0.33, 0.5, 0.7, 0.8]
+    TrunkRoad/Primary-City: [0.67, 0.82, 0.92, 1.02]
+    Distributor/Secondary: [0.37, 0.5, 0.63, 0.8]
+    Local/Collector: [0.55, 0.75, 0.9, 1]            # not used
+    Access-residential: [0.14, 0.25, 0.39, 0.52]
+  car_unit_factors: {PC: 1, LCV: 1, MOT: 1, BUS: 1.75, HGV: 2.5}
 
 # Counts quality control (v1 data_preprocessing/31 settings)
 counts_qa:

@@ -7,6 +7,7 @@ from drive.config import DriveConfig
 from drive.domain.activity import Activity
 from drive.domain.calendar import combined_day_types
 from drive.domain.counts_qa import QAParams, QAReport, link_attributes, link_volumes, qa_link_counts
+from drive.domain.kernel import KernelParams
 from drive.io.calendar_excel import read_calendar
 
 
@@ -14,6 +15,30 @@ def _require(config: DriveConfig):
     if config.run is None or config.counts_qa is None:
         raise ValueError('The config needs the run and counts_qa sections')
     return config.run, config.counts_qa
+
+
+def kernel_params(config: DriveConfig) -> KernelParams:
+    run, _ = _require(config)
+    if config.kernel is None or not run.vehicle_classes or not run.components:
+        raise ValueError('The config needs the kernel section and run.vehicle_classes and run.components')
+    return KernelParams(vehicle_classes=run.vehicle_classes,
+                        components=run.components,
+                        car_unit_factors=config.kernel.car_unit_factors,
+                        vcr_thresholds=config.kernel.vcr_thresholds,
+                        area_type=run.area_type)
+
+
+def load_hot_factors(config: DriveConfig, year: int, version: int) -> pd.DataFrame:
+    """Hot emission factors of one year, level-of-service specific, for the run's ambient pattern."""
+    run, _ = _require(config)
+    if run.hbefa_version is None or run.hot_ambient_pattern is None:
+        raise ValueError('The config needs run.hbefa_version and run.hot_ambient_pattern')
+    factors = store.read_emission_factors(config.paths.store, run.hbefa_version, year, 'hot', 'single_ts',
+                                          run.components, version)
+    selected = factors[factors['ambient_pattern'] == run.hot_ambient_pattern]
+    if selected.empty:
+        raise ValueError(f'No {year} hot factors with the ambient pattern {run.hot_ambient_pattern}')
+    return selected
 
 
 def load_day_types(config: DriveConfig) -> pd.Series:

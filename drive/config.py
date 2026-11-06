@@ -71,6 +71,16 @@ class RunConfig(_Strict):
     reference_day_type: int = 0  # normweekday
     data_version: int | datetime | None = None  # store batch id or tz-aware timestamp, None = latest
     hbefa_version: int | None = None  # the emission factors a run reads from the store
+    vehicle_classes: list[str] = []
+    components: list[str] = []
+    hot_ambient_pattern: str | None = None  # the HBEFA pattern of the hot factors (R33: fixed for now)
+    area_type: Literal['Urban', 'Motorway', 'Rural'] = 'Urban'
+
+
+class KernelConfig(_Strict):
+    """Settings of domain.kernel (values from v1 hbefa_hot_emissions)."""
+    vcr_thresholds: dict[str, tuple[float, float, float, float]]  # road type -> LOS limits of the VCR
+    car_unit_factors: dict[str, float]  # HBS 2015
 
 
 class CountsQAConfig(_Strict):
@@ -94,6 +104,7 @@ class DriveConfig(_Strict):
     ingest: IngestConfig = IngestConfig()
     run: RunConfig | None = None
     counts_qa: CountsQAConfig | None = None
+    kernel: KernelConfig | None = None
     scaling_road_types: dict[str, str] = {}  # road type -> scaling road type, unlisted types map to themselves
 
     @model_validator(mode='after')

@@ -6,16 +6,18 @@ completeness in the reference window.
 
 Behaviour kept from v1 for comparability (candidates for later method decisions):
 - missing detector values on a link-day are summed as 0
-- outliers are detected per (link, vehicle class, day type) over all years at once
+- outliers are detected per (link, vehicle class, day type group) over all years at once
 Deliberate change: links without data in the completeness window are incomplete (R3),
 v1 marked them complete.
 """
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 import numpy as np
 import pandas as pd
 
+from drive.domain.calendar import group_day_types
 from drive.schemas import HOURS, LINK_COUNTS
 
 KEY = ['road_link_id', 'vehicle_class', 'date']
@@ -34,6 +36,7 @@ class QAParams:
     completeness_threshold: float = 0.6
     iqr_range: tuple[float, float] = (2.5, 97.5)
     scaling_road_types: dict[str, str] = field(default_factory=dict)
+    outlier_groups: Mapping[int, int] | None = None  # outlier groups, None keeps every day type on its own (v1)
 
 
 @dataclass
@@ -84,7 +87,7 @@ def link_volumes(raw_counts: pd.DataFrame,
         raw_counts: RAW_COUNTS rows
         counter_links: COUNTER_LINKS rows of one traffic model
         link_attributes: link_attributes() of the same model
-        day_types: domain.calendar.combined_day_types, must cover all dates
+        day_types: day type per date, must cover all dates
 
     Returns:
         pd.DataFrame: road_link_id, vehicle_class, date, road_type, day_type, daily_value, h00..h23
@@ -110,13 +113,14 @@ def link_volumes(raw_counts: pd.DataFrame,
     return volume[KEY + ['road_type', 'day_type', 'daily_value'] + HOURS].reset_index(drop=True)
 
 
-def _drop_outliers(volume: pd.DataFrame, threshold: float) -> tuple[pd.DataFrame, int]:
-    """Modified z-score per (link, vehicle class, day type); a group with MAD 0 flags every
+def _drop_outliers(volume: pd.DataFrame,
+                   threshold: float,
+                   outlier_groups: Mapping[int, int] | None = None) -> tuple[pd.DataFrame, int]:
+    """Modified z-score per (link, vehicle class, day type group); a group with MAD 0 flags every
     value that differs from the median, as in v1."""
-    groups = volume.groupby(['road_link_id', 'vehicle_class', 'day_type'])['daily_value']
-    deviation = volume['daily_value'] - groups.transform('median')
-    mad = deviation.abs().groupby([volume['road_link_id'], volume['vehicle_class'], volume['day_type']]) \
-        .transform('median')
+    keys = [volume['road_link_id'], volume['vehicle_class'], group_day_types(volume['day_type'], outlier_groups)]
+    deviation = volume['daily_value'] - volume['daily_value'].groupby(keys).transform('median')
+    mad = deviation.abs().groupby(keys).transform('median')
     with np.errstate(divide='ignore', invalid='ignore'):
         z = np.abs(0.6745 * deviation / mad)
     outlier = z > threshold
@@ -146,7 +150,7 @@ def qa_link_counts(volume: pd.DataFrame,
     volume = volume[consistent & (volume['daily_value'] > params.min_daily_value)]
     report.rows['consistent'] = len(volume)
 
-    volume, report.outliers = _drop_outliers(volume, params.outlier_z_threshold)
+    volume, report.outliers = _drop_outliers(volume, params.outlier_z_threshold, params.outlier_groups)
     report.rows['without_outliers'] = len(volume)
     volume = volume.copy()
 

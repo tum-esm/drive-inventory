@@ -9,6 +9,7 @@ dependencies = [
     "dotenv>=0.9.9",
     "duckdb>=2.0.0",
     "geopandas>=1.0.1",
+    "holidays>=0.108",
     "ipython>=9.0.2",
     "jupyter>=1.1.1",
     "matplotlib>=3.10.1",

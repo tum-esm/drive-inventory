@@ -219,6 +219,7 @@ def report_period_effect(config) -> None:
 
 if __name__ == '__main__':
     config = load_config(sys.argv[1] if len(sys.argv) > 1 else 'configs/munich_2025.yaml')
+    config.run.calendar_source = 'v1_workbook'  # v1's day types and profile groups
     link_counts_ok = compare_link_counts(config)
     print('\nLINK COUNTS:', 'OK (only expected differences)' if link_counts_ok else 'UNEXPLAINED DIFFERENCES')
     print('\nActivity on v1 input vs TrafficCounts:')

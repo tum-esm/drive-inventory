@@ -1,11 +1,16 @@
 """Command line interface: `drive ingest <source> <config>` (later also `drive run`, `drive export`)."""
 
 import argparse
+import hashlib
 import sys
+
+import holidays
 
 from drive import __version__, store
 from drive.config import DriveConfig, load_config
+from drive.domain.calendar import build_calendar
 from drive.io import hbefa
+from drive.io.calendar_holidays import read_holidays, read_overrides
 from drive.io.counts_preprocessed import read_preprocessed_counts
 from drive.io.visum import read_links, read_zones
 from drive.domain.kernel import scaling_factors
@@ -96,6 +101,34 @@ def _ingest_visum(args: argparse.Namespace) -> int:
     return 0
 
 
+def _ingest_calendar(args: argparse.Namespace) -> int:
+    config = load_config(args.config)
+    c = config.ingest.calendar
+    if c is None:
+        raise ValueError('No ingest.calendar section in the config')
+    print(f'Store: {config.paths.store}')
+    region = f'{c.country}-{c.subdivision}'
+    years = list(range(c.years[0], c.years[1] + 1))
+    public, school = read_holidays(c.country, c.subdivision, years, c.public_categories)
+    overrides = read_overrides(c.overrides) if c.overrides is not None else None
+    calendar = build_calendar(region, years, public, school, overrides)
+
+    # there is no input file: the generated content is the identity of a batch, so a package update
+    # that changes dates is a new ingest, and one that changes nothing is skipped
+    sha = hashlib.sha256(calendar.to_csv(index=False).encode()).hexdigest()
+    latest = store.latest_batch(config.paths.store, 'calendar', {'region': region})
+    if latest is not None and latest[1] == sha:
+        print(f'{region} {c.years[0]}-{c.years[1]}: already ingested as batch {latest[0]}, skipped')
+        return 0
+    source = f'holidays {holidays.__version__}'
+    batch = store.write_batch(config.paths.store, 'calendar', source, c.overrides or source, sha, {'region': region},
+                              {'calendar': calendar})
+    print(f'{region} {c.years[0]}-{c.years[1]} -> batch {batch}: {len(calendar)} days from {source}, '
+          f'{calendar["override"].notna().sum()} with an override; '
+          f'days per day type {calendar["day_type"].value_counts().sort_index().to_dict()}')
+    return 0
+
+
 def _run(args: argparse.Namespace) -> int:
     config = load_config(args.config)
     run = compute_hot_emissions(config)
@@ -131,6 +164,10 @@ def main(argv: list[str] | None = None) -> int:
     visum = sources.add_parser('visum', help='links and zones of the models under traffic_models')
     visum.add_argument('config', help='path to the run configuration (YAML)')
     visum.set_defaults(func=_ingest_visum)
+
+    cal = sources.add_parser('calendar', help='day types from the holidays package and the override file')
+    cal.add_argument('config', help='path to the run configuration (YAML)')
+    cal.set_defaults(func=_ingest_calendar)
 
     compute = commands.add_parser('run', help='compute the annual hot emissions of a run')
     compute.add_argument('config', help='path to the run configuration (YAML)')

@@ -23,7 +23,7 @@ class _Strict(BaseModel):
 class PathsConfig(_Strict):
     data_root: Path
     store: Path = Path('restricted_input/drive.duckdb')
-    calendar: Path = Path('auxiliary/calender_18to26.xlsx')
+    calendar: Path = Path('auxiliary/calender_18to26.xlsx')  # v1's workbook, only read for comparisons with v1
     clip_boundary: Path | None = None  # interim: read directly until `drive ingest boundaries` exists
     results: Path = Path('inventory/v2')
 
@@ -62,9 +62,19 @@ class HbefaIngest(_Strict):
     version: int  # e.g. 501007
 
 
+class CalendarIngest(_Strict):
+    """Calendar generated from the `holidays` package, see io.calendar_holidays."""
+    country: str  # e.g. DE
+    subdivision: str  # e.g. BY
+    years: tuple[int, int]  # first and last year (inclusive)
+    public_categories: list[str] = ['public']  # categories of the package that count as holidays
+    overrides: Path | None = None  # corrections of the school holidays: csv with date, school_holiday, reason
+
+
 class IngestConfig(_Strict):
     counts: list[CountsSource] = []
     hbefa: HbefaIngest | None = None
+    calendar: CalendarIngest | None = None
 
 
 class RunConfig(_Strict):
@@ -72,7 +82,8 @@ class RunConfig(_Strict):
     start: date | None = None  # first and last day of the emission calculation, one calendar year for now
     end: date | None = None
     reference_year: int  # normalisation year of the scaling, must match the traffic model year
-    reference_day_type: int = 0  # normweekday
+    reference_day_type: Literal[0] = 0  # normal weekday, the only class that is a subset of its profile group
+    calendar_source: Literal['store', 'v1_workbook'] = 'store'  # v1_workbook: v1's day types, for comparisons with v1
     data_version: int | datetime | None = None  # store batch id or tz-aware timestamp, None = latest
     hbefa_version: int | None = None  # the emission factors a run reads from the store
     vehicle_classes: list[str] = []
@@ -134,6 +145,8 @@ class DriveConfig(_Strict):
             c.path = root / c.path
         if self.ingest.hbefa is not None:
             self.ingest.hbefa.directory = root / self.ingest.hbefa.directory
+        if self.ingest.calendar is not None and self.ingest.calendar.overrides is not None:
+            self.ingest.calendar.overrides = root / self.ingest.calendar.overrides
         return self
 
 

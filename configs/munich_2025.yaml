@@ -4,7 +4,7 @@
 paths:
   data_root: ../data
   store: restricted_input/drive.duckdb
-  calendar: auxiliary/calender_18to26.xlsx
+  calendar: auxiliary/calender_18to26.xlsx   # v1's workbook, only read for comparisons with v1
   clip_boundary: geodata/munich_boarders.gpkg
   results: inventory/v2
 
@@ -54,6 +54,14 @@ ingest:
   hbefa:
     directory: restricted_input/hbefa
     version: 501007
+  # Day types from the holidays package, see domain.calendar. Mariae Himmelfahrt (catholic) is a holiday in Munich,
+  # not in all of Bavaria. The overrides correct school holidays that were changed after they were planned.
+  calendar:
+    country: DE
+    subdivision: BY
+    years: [2018, 2026]
+    public_categories: [public, catholic]
+    overrides: auxiliary/calendar_overrides_munich.csv
 
 run:
   traffic_model: visum2025

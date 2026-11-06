@@ -18,7 +18,7 @@ import geopandas as gpd
 import pandas as pd
 import shapely
 
-from drive.schemas import COUNT_KEY, EF_KEY, HOURS
+from drive.schemas import CALENDAR_KEY, COUNT_KEY, EF_KEY, HOURS
 
 DataVersion = int | datetime | None
 
@@ -112,6 +112,16 @@ CREATE TABLE IF NOT EXISTS zones (
     crs           VARCHAR NOT NULL,
     geometry      BLOB NOT NULL
 );
+CREATE TABLE IF NOT EXISTS calendar (
+    batch_id       BIGINT NOT NULL,
+    region         VARCHAR NOT NULL,
+    date           DATE NOT NULL,
+    day_of_week    BIGINT NOT NULL,
+    day_type       BIGINT NOT NULL,
+    public_holiday VARCHAR,
+    school_holiday VARCHAR,
+    override       VARCHAR
+);
 """
 
 # table -> key that identifies a row across batches (latest batch wins)
@@ -121,6 +131,7 @@ _KEYS = {
     'emission_factors': EF_KEY,
     'links': ['traffic_model', 'road_link_id', 'from_node'],
     'zones': ['traffic_model', 'zone_id'],
+    'calendar': CALENDAR_KEY,
 }
 
 
@@ -146,6 +157,21 @@ def find_batch(store: Path, kind: str, input_sha256: str, params: dict) -> int |
         row = con.execute('SELECT batch_id FROM ingest_batches WHERE kind = ? AND input_sha256 = ? AND params = ?',
                           [kind, input_sha256, json.dumps(params, sort_keys=True)]).fetchone()
     return row[0] if row else None
+
+
+def latest_batch(store: Path, kind: str, params: dict) -> tuple[int, str] | None:
+    """Id and input hash of the newest batch with these parameters, if any.
+
+    For generated inputs: unlike find_batch, content that returns to an older state counts as new,
+    because the newest batch is the one that is read.
+    """
+    if not store.exists():
+        return None
+    with _connect_read(store) as con:
+        row = con.execute("""SELECT batch_id, input_sha256 FROM ingest_batches WHERE kind = ? AND params = ?
+                             ORDER BY batch_id DESC LIMIT 1""",
+                          [kind, json.dumps(params, sort_keys=True)]).fetchone()
+    return row
 
 
 def write_batch(store: Path,
@@ -311,6 +337,30 @@ def _to_geo(frame: pd.DataFrame) -> gpd.GeoDataFrame:
         raise ValueError(f'Expected one CRS per batch, got {list(crs)}')
     geometry = shapely.from_wkb(frame['geometry'].to_numpy())
     return gpd.GeoDataFrame(frame.drop(columns=['crs', 'geometry']), geometry=geometry, crs=crs[0])
+
+
+def read_calendar(store: Path, region: str, data_version: DataVersion = None) -> pd.DataFrame:
+    """Calendar of one region (contract drive.schemas.CALENDAR plus batch_id).
+
+    A calendar is a whole snapshot, so its latest batch replaces earlier ones completely. Per-key
+    reads would mix batches built under different rules if a newer one covers fewer years.
+
+    Raises:
+        ValueError: if the region is not in the store
+    """
+    version = resolve_version(store, data_version)
+    missing = f'No calendar of {region} in {store} up to batch {version}, run `drive ingest calendar` first'
+    with _connect_read(store) as con:
+        try:
+            df = con.execute("""
+                SELECT * FROM calendar WHERE region = ? AND batch_id = (
+                    SELECT max(batch_id) FROM calendar WHERE region = ? AND batch_id <= ?
+                ) ORDER BY date""", [region, region, version]).df()
+        except duckdb.CatalogException as error:
+            raise ValueError(missing) from error
+    if df.empty:
+        raise ValueError(missing)
+    return df
 
 
 def read_batches(store: Path) -> pd.DataFrame:

@@ -9,7 +9,7 @@ import pandas as pd
 from drive import store
 from drive.config import DriveConfig
 from drive.domain.activity import Activity
-from drive.domain.calendar import combined_day_types
+from drive.domain.calendar import DAY_GROUPS, OUTLIER_GROUPS, calendar_day_types, combined_day_types
 from drive.domain.counts_qa import QAParams, QAReport, link_attributes, link_volumes, qa_link_counts
 from drive.domain.kernel import (EfTable, HotEmissions, KernelParams, build_aggregated_ef_table, build_ef_table,
                                  hot_emissions, profile_frame, share_corrections)
@@ -49,11 +49,36 @@ def load_hot_factors(config: DriveConfig, year: int, version: int) -> pd.DataFra
     return selected
 
 
-def load_day_types(config: DriveConfig) -> pd.Series:
-    """Combined day types for all years of the counts period."""
-    _, qa = _require(config)
-    years = list(range(qa.period_start.year, qa.period_end.year + 1))
-    return combined_day_types(read_calendar(config.paths.calendar, years))
+def load_day_types(config: DriveConfig, version: int | None = None) -> pd.Series:
+    """Day type per date for the counts period and the run.
+
+    Args:
+        version: store batch id to read at, None = run.data_version
+
+    Raises:
+        ValueError: if the calendar doesn't cover the counts period and the run
+    """
+    run, qa = _require(config)
+    first = min(qa.period_start, run.start or qa.period_start).year
+    last = max(qa.period_end, run.end or qa.period_end).year
+    if run.calendar_source == 'v1_workbook':
+        return combined_day_types(read_calendar(config.paths.calendar, list(range(first, last + 1))))
+
+    c = config.ingest.calendar
+    if c is None:
+        raise ValueError('No ingest.calendar section in the config')
+    calendar = store.read_calendar(config.paths.store, f'{c.country}-{c.subdivision}',
+                                   run.data_version if version is None else version)
+    day_types = calendar_day_types(calendar)
+    if day_types.index.min().year > first or day_types.index.max().year < last:
+        raise ValueError(f'The calendar covers {day_types.index.min().year} to {day_types.index.max().year}, '
+                         f'the counts period and the run need {first} to {last}')
+    return day_types
+
+
+def _day_groups(config: DriveConfig) -> dict[int, int] | None:
+    """Groups of the day types; v1's day types are their own groups."""
+    return DAY_GROUPS if config.run.calendar_source == 'store' else None
 
 
 def load_link_counts(config: DriveConfig) -> tuple[pd.DataFrame, QAReport, int]:
@@ -79,10 +104,11 @@ def load_link_counts(config: DriveConfig) -> tuple[pd.DataFrame, QAReport, int]:
                       sqv_threshold=qa.sqv_threshold,
                       completeness_threshold=qa.completeness_threshold,
                       iqr_range=qa.iqr_range,
-                      scaling_road_types=config.scaling_road_types)
+                      scaling_road_types=config.scaling_road_types,
+                      outlier_groups=OUTLIER_GROUPS if run.calendar_source == 'store' else None)
 
     raw['date'] = raw['date'].astype('datetime64[us]')
-    volume = link_volumes(raw, links, attributes, load_day_types(config))
+    volume = link_volumes(raw, links, attributes, load_day_types(config, version))
     link_counts, report = qa_link_counts(volume, attributes, params)
     return link_counts, report, version
 
@@ -95,7 +121,8 @@ def load_activity(config: DriveConfig) -> tuple[Activity, QAReport, int]:
     """
     run, _ = _require(config)
     link_counts, report, version = load_link_counts(config)
-    activity = Activity(link_counts, load_day_types(config), run.reference_year, run.reference_day_type)
+    activity = Activity(link_counts, load_day_types(config, version), run.reference_year, run.reference_day_type,
+                        _day_groups(config))
     return activity, report, version
 
 
@@ -139,7 +166,7 @@ def compute_hot_emissions(config: DriveConfig) -> HotRun:
     else:
         links = links.assign(piece=0)
     params = kernel_params(config)
-    corrections = share_corrections(links, activity.vehicle_shares, load_day_types(config), run.reference_year,
+    corrections = share_corrections(links, activity.vehicle_shares, load_day_types(config, version), run.reference_year,
                                     run.reference_day_type)
     factors = load_hot_factors(config, run.start.year, version)
     ef = build_aggregated_ef_table(links, factors, params) if run.hot_mode == 'aggregated' \

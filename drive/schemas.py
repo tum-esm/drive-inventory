@@ -177,3 +177,23 @@ ZONES = pa.DataFrameSchema(
     ordered=True,
     coerce=True,
 )
+
+CALENDAR_KEY = ['region', 'date']
+
+# One row per day. day_type: 0 normal weekday, 1 weekday, 2 vacation weekday, 3 Saturday, 4 Sunday/holiday, see domain.calendar.
+# override: why school_holiday differs from the holiday package, empty if it does not
+CALENDAR = pa.DataFrameSchema(
+    {
+        'region': pa.Column(str),
+        'date': pa.Column('datetime64[us]'),
+        'day_of_week': pa.Column('int64', pa.Check.in_range(0, 6)),
+        'day_type': pa.Column('int64', pa.Check.isin([0, 1, 2, 3, 4])),
+        'public_holiday': pa.Column(str, nullable=True),
+        'school_holiday': pa.Column(str, nullable=True),
+        'override': pa.Column(str, nullable=True),
+    },
+    unique=CALENDAR_KEY,
+    strict=True,
+    ordered=True,
+    coerce=True,
+)

@@ -14,9 +14,12 @@ Deliberate change: days without data still give zeros in the time profile, but t
 listed in `missing_days` (v1 swallowed the exception).
 """
 
+from collections.abc import Mapping
+
 import numpy as np
 import pandas as pd
 
+from drive.domain.calendar import group_day_types
 from drive.domain.counts_qa import iqr_mean
 from drive.schemas import HOURS, LINK_VEHICLE_CLASSES
 
@@ -41,7 +44,7 @@ def fill_gaps(values: pd.Series, day_types: pd.Series) -> pd.Series:
 
     Args:
         values: indexed by one or more category levels, with `date` as the last level
-        day_types: combined day type per date, must cover the whole date range
+        day_types: day type or day type group per date, must cover the whole date range
 
     Returns:
         pd.Series with the same index levels. All dates between the overall first and last
@@ -65,13 +68,16 @@ class Activity:
                  link_counts: pd.DataFrame,
                  day_types: pd.Series,
                  reference_year: int,
-                 reference_day_type: int = 0) -> None:
+                 reference_day_type: int = 0,
+                 day_groups: Mapping[int, int] | None = None) -> None:
         """
         Args:
             link_counts: LINK_COUNTS rows (at least the columns in _REQUIRED)
-            day_types: domain.calendar.combined_day_types, must cover all dates of the counts
+            day_types: day type per date, must cover all dates of the counts
             reference_year: normalisation year, must match the traffic model year
             reference_day_type: day type the annual cycle is normalised to
+            day_groups: day type -> group for gap filling and hourly profiles. None keeps every
+                day type on its own (v1); the pipeline uses domain.calendar.DAY_GROUPS
 
         Raises:
             ValueError: if columns, vehicle classes or day types are missing
@@ -93,7 +99,8 @@ class Activity:
         uncovered = days.difference(day_types.index)
         if len(uncovered) > 0:
             raise ValueError(f'No day type for {len(uncovered)} dates, e.g. {list(uncovered[:3])}')
-        self._day_types = day_types
+        self._day_groups = day_groups
+        self._day_types = group_day_types(day_types, day_groups)  # references use link_counts['day_type'] instead
 
         self.vehicle_shares = self._calc_vehicle_shares(link_counts)
         self.annual_cycles = self._calc_annual_cycles(link_counts)
@@ -128,12 +135,12 @@ class Activity:
         median = normalised.groupby([totals['scaling_road_type'], totals['date']]).median()
         return fill_gaps(median, self._day_types).rename('scaling')
 
-    @staticmethod
-    def _calc_daily_cycles(link_counts: pd.DataFrame) -> pd.DataFrame:
+    def _calc_daily_cycles(self, link_counts: pd.DataFrame) -> pd.DataFrame:
         """Normalised hourly profile per (year, month, day_type, vehicle_class), from the monthly
         median over all rows. Months without data in a group between its first and last month
         stay as NaN rows."""
-        cycles = link_counts.set_index('date').groupby(['day_type', 'vehicle_class'])[HOURS] \
+        grouped = link_counts.assign(day_type=group_day_types(link_counts['day_type'], self._day_groups))
+        cycles = grouped.set_index('date').groupby(['day_type', 'vehicle_class'])[HOURS] \
             .resample('ME').median()
         cycles = cycles.div(cycles.sum(axis=1), axis=0).reset_index()
         cycles.insert(2, 'month', cycles['date'].dt.month)

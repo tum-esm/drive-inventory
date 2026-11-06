@@ -1,7 +1,7 @@
 """Reader for the hand-maintained calendar workbook (data/auxiliary/calender_18to26.xlsx).
 
 One sheet per year with columns `date, day_of_week (0=Mon..6=Sun), day_type`
-(1 weekday, 2 weekend, 3 holiday, 4 gap day, 5 vacation day). Replaced by R21.
+(1 weekday, 2 weekend, 3 holiday, 4 gap day, 5 vacation day). Only used for comparisons with v1 since `drive ingest calendar` (R21).
 """
 
 from pathlib import Path

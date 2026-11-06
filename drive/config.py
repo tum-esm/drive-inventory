@@ -56,10 +56,39 @@ class CountsSource(_Strict):
     path: Path
 
 
+class HbefaTable(_Strict):
+    """Tables to download, one per year."""
+    category: Literal['hot', 'start']
+    aggregation: Literal['single_ts', 'aggregate_ts']
+    years: list[int]
+    request: dict[str, str] = {}  # HBEFA API parameters of these tables, on top of HbefaApi.request
+
+
+class HbefaApi(_Strict):
+    """HBEFA web API, see io.hbefa_api. Credentials are named here, their values are never in the config."""
+    base_url: str
+    email_env: str = 'HBEFA_EMAIL'
+    password_env: str = 'HBEFA_PASSWORD'
+    env_file: Path | None = None  # used for names that aren't in the environment
+    poll_seconds: float = 5
+    timeout_minutes: float = 120  # per table
+    request: dict[str, str]  # HBEFA API parameters of all tables
+    tables: list[HbefaTable]
+
+    @model_validator(mode='after')
+    def _check_request(self) -> 'HbefaApi':
+        for request in [self.request, *(t.request for t in self.tables)]:
+            reserved = {'emcat', 'agglevel_ts', 'yearref', 'hbversion_int'} & set(request)
+            if reserved:
+                raise ValueError(f'{sorted(reserved)} follow from the table and the version, remove them from request')
+        return self
+
+
 class HbefaIngest(_Strict):
     """Directory with emission factor tables, see io.hbefa for the naming scheme."""
     directory: Path
     version: int  # e.g. 501007
+    api: HbefaApi | None = None  # only needed for `drive ingest hbefa --download`
 
 
 class CalendarIngest(_Strict):
@@ -145,6 +174,9 @@ class DriveConfig(_Strict):
             c.path = root / c.path
         if self.ingest.hbefa is not None:
             self.ingest.hbefa.directory = root / self.ingest.hbefa.directory
+            api = self.ingest.hbefa.api
+            if api is not None and api.env_file is not None:
+                api.env_file = root / api.env_file
         if self.ingest.calendar is not None and self.ingest.calendar.overrides is not None:
             self.ingest.calendar.overrides = root / self.ingest.calendar.overrides
         return self

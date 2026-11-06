@@ -9,7 +9,7 @@ import holidays
 from drive import __version__, store
 from drive.config import DriveConfig, load_config
 from drive.domain.calendar import build_calendar
-from drive.io import hbefa
+from drive.io import hbefa, hbefa_api
 from drive.io.calendar_holidays import read_holidays, read_overrides
 from drive.io.counts_preprocessed import read_preprocessed_counts
 from drive.io.visum import read_links, read_zones
@@ -55,6 +55,8 @@ def _ingest_hbefa(args: argparse.Namespace) -> int:
     if config.ingest.hbefa is None:
         raise ValueError('No ingest.hbefa section in the config')
     print(f'Store: {config.paths.store}')
+    if args.download:
+        hbefa_api.download_missing(config.ingest.hbefa)
     for file in hbefa.find_files(config.ingest.hbefa.directory, config.ingest.hbefa.version):
         sha = store.file_sha256(file.path)
         existing = store.find_batch(config.paths.store, 'emission_factors', sha, {})
@@ -160,6 +162,7 @@ def main(argv: list[str] | None = None) -> int:
     counts.set_defaults(func=_ingest_counts)
     ef = sources.add_parser('hbefa', help='emission factor tables in ingest.hbefa.directory')
     ef.add_argument('config', help='path to the run configuration (YAML)')
+    ef.add_argument('--download', action='store_true', help='first download the tables under ingest.hbefa.api that are missing')
     ef.set_defaults(func=_ingest_hbefa)
     visum = sources.add_parser('visum', help='links and zones of the models under traffic_models')
     visum.add_argument('config', help='path to the run configuration (YAML)')

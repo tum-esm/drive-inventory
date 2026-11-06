@@ -4,7 +4,7 @@ One naming scheme (R2): `{year}_{category}_{aggregation}_v{hbefa_version}.parque
 `2025_hot_single_ts_v501007.parquet`. The tables don't contain the HBEFA version, so it comes
 from the file name; year and category are checked against the content.
 
-The API client that downloads these files follows later (R20).
+`io.hbefa_api` downloads these files.
 """
 
 import re
@@ -53,6 +53,10 @@ class EfFile:
     hbefa_version: int
 
 
+def file_name(reference_year: int, emission_category: str, aggregation: str, hbefa_version: int) -> str:
+    return f'{reference_year}_{emission_category}_{aggregation}_v{hbefa_version}.parquet'
+
+
 def parse_file_name(path: str | Path) -> EfFile:
     """Raises ValueError if the file name doesn't follow the naming scheme."""
     path = Path(path)
@@ -77,14 +81,18 @@ def find_files(directory: str | Path, hbefa_version: int) -> list[EfFile]:
 
 
 def read_table(file: EfFile) -> pd.DataFrame:
-    """Reads one table into the EMISSION_FACTORS contract.
+    """Reads one table file into the EMISSION_FACTORS contract, see `to_contract`."""
+    return to_contract(pd.read_parquet(file.path), file)
+
+
+def to_contract(raw: pd.DataFrame, file: EfFile) -> pd.DataFrame:
+    """Converts a raw table to the EMISSION_FACTORS contract.
 
     Raises:
         ValueError: on unknown columns, unmapped vehicle categories or content that
             contradicts the file name
         pandera.errors.SchemaError: if a key is repeated
     """
-    raw = pd.read_parquet(file.path)
     name = file.path.name
 
     unknown = set(raw.columns) - set(_COLUMNS)

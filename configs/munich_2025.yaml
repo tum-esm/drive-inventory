@@ -54,6 +54,49 @@ ingest:
   hbefa:
     directory: restricted_input/hbefa
     version: 501007
+    # `drive ingest hbefa --download` requests the listed tables that aren't in the directory yet
+    api:
+      base_url: https://hbefa-server-repo.azurewebsites.net
+      env_file: ../utils/.env   # HBEFA_EMAIL, HBEFA_PASSWORD; to be moved outside the repo (spec 4.7)
+      # Parameter ids are explained in notebooks/data_preprocessing/00_retrieve_ef.ipynb
+      request:
+        country: D
+        pollutant: CO,NOx,NO2,CO2(rep),CO2(total),PM10-ex,CH4,PM10-nx,PM2.5-ex,BC-ex,PM2.5-nx,BC-nx
+        idvehcat: 1,2,14,6,9                 # PC, LCV, HGV, coach, motorcycle
+        wgt: 'True'
+        idtraffic_scen: '48'
+        idtsgrad: '523'                      # D Ø-Urban UBA 2024
+        agglevel_fleet: vehcat
+        agglevel_energy: none
+        nocorr: 'False'
+        lang: en
+        col_selection: standard
+        col_titles: speaking
+        load_in_rows: 'False'
+        agg_cols: 'False'
+        verbose: 'False'
+        test_outputs: 'False'
+        calc_wtt: 'True'
+        idenergymix_scen: '3'
+        idarea: '2'                          # urban
+        idroadtype: 10,20,21,30,40,50        # Motorway-Nat, Primary-Nat, Primary-City, Distributor, Local, Access
+        idpatternambientcond: 9901,9951,10001,10051,10101,10151,10201,10251   # -10 to +25 °C, tØ, dØ
+      tables:
+        - category: hot
+          aggregation: single_ts
+          years: [2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025]
+          request:
+            idgrad: 30,54,56,58,62,64,66     # 0 %, -6 %, -4 %, -2 %, +2 %, +4 %, +6 %
+        - category: hot
+          aggregation: aggregate_ts
+          years: [2024, 2025]
+          request:
+            idgrad: 30,54,56,58,62,64,66     # changes the mean: without it factors are up to 22 % higher (spec Q24)
+        - category: start
+          aggregation: aggregate_ts
+          years: [2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025]
+          request:
+            pollutant: CO,NOx,NO2,CO2(rep),CO2(total),PM10-ex,CH4,PM2.5-ex,BC-ex   # start factors have no non-exhaust part
   # Day types from the holidays package, see domain.calendar. Mariae Himmelfahrt (catholic) is a holiday in Munich,
   # not in all of Bavaria. The overrides correct school holidays that were changed after they were planned.
   calendar:

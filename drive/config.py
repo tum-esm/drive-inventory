@@ -27,7 +27,25 @@ class PathsConfig(_Strict):
 
 
 class TrafficModelConfig(_Strict):
-    links: Path  # preprocessed VISUM links (visum_links_<year>.gpkg)
+    links: Path  # raw VISUM link export
+    zones: Path  # raw VISUM zone export
+    crs: str  # expected CRS of both files, e.g. EPSG:25832; ingest raises on a mismatch
+    link_columns: dict[str, str] = {}  # raw name -> standard VISUM name, for exports with other names
+    zone_columns: dict[str, Literal['PC_starts', 'LCV_starts', 'HGV_starts']]  # raw name -> contract name
+
+
+class RoadTypeRule(_Strict):
+    """VISUM TYPENO range (inclusive) -> HBEFA road type, optionally only from a free-flow speed on."""
+    typeno: tuple[int, int]
+    road_type: str
+    min_speed: int | None = None
+
+
+class VisumConfig(_Strict):
+    """Conversion of a VISUM export to the links contract, see io.visum."""
+    min_dtv: float  # links with less daily traffic are dropped
+    road_types: list[RoadTypeRule]  # the first matching rule wins
+    excluded_typeno: list[tuple[int, int]]  # ranges without road traffic; any other unmatched TYPENO raises
 
 
 class CountsSource(_Strict):
@@ -72,6 +90,7 @@ class CountsQAConfig(_Strict):
 class DriveConfig(_Strict):
     paths: PathsConfig
     traffic_models: dict[TrafficModel, TrafficModelConfig] = {}
+    visum: VisumConfig | None = None
     ingest: IngestConfig = IngestConfig()
     run: RunConfig | None = None
     counts_qa: CountsQAConfig | None = None
@@ -91,6 +110,7 @@ class DriveConfig(_Strict):
         self.paths.calendar = root / self.paths.calendar
         for m in self.traffic_models.values():
             m.links = root / m.links
+            m.zones = root / m.zones
         for c in self.ingest.counts:
             c.path = root / c.path
         if self.ingest.hbefa is not None:

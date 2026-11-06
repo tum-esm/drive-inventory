@@ -108,3 +108,72 @@ COUNTER_LINKS = pa.DataFrameSchema(
     ordered=True,
     coerce=True,
 )
+
+HBEFA_ROAD_TYPES = ['Motorway-Nat', 'Motorway-City', 'TrunkRoad/Primary-National', 'TrunkRoad/Primary-City',
+                    'Distributor/Secondary', 'Local/Collector', 'Access-residential']
+HBEFA_GRADIENTS = ['-6%', '-4%', '-2%', '0%', '+2%', '+4%', '+6%']
+
+
+def _is_wkb(s):
+    return s.map(lambda g: isinstance(g, (bytes, bytearray)) and len(g) > 0)
+
+
+# Speeds with HBEFA traffic situations per road type, ascending
+HBEFA_SPEEDS = {'Motorway-Nat': [80, 90, 100, 110, 120, 130],
+                'Motorway-City': [60, 70, 80, 90, 100, 110],
+                'TrunkRoad/Primary-National': [70, 80, 90, 100, 110, 120],
+                'TrunkRoad/Primary-City': [50, 60, 70, 80, 90],
+                'Distributor/Secondary': [30, 40, 50, 60, 70, 80],
+                'Local/Collector': [30, 40, 50, 60],
+                'Access-residential': [30, 40, 50]}
+
+# One row per directed link of a traffic model: `road_link_id` plus `from_node` identifies it,
+# most ids have one row per direction. `file_row` keeps the order of the export. Geometry is
+# WKB in the CRS of `crs`. `speed` is the model's free-flow speed (km/h), `dtv_*` are vehicles
+# per average weekday, and `visum_length_km` is the model's length, not the geometry's.
+LINKS = pa.DataFrameSchema(
+    {
+        'traffic_model': pa.Column(str, pa.Check.str_matches(r'^visum\d{4}$')),
+        'road_link_id': pa.Column('int64'),
+        'from_node': pa.Column('int64'),
+        'to_node': pa.Column('int64'),
+        'file_row': pa.Column('int64', pa.Check.ge(0)),
+        'typeno': pa.Column('int64', pa.Check.ge(0)),
+        'road_type': pa.Column(str, pa.Check.isin(HBEFA_ROAD_TYPES)),
+        'scaling_road_type': pa.Column(str, pa.Check.isin(HBEFA_ROAD_TYPES)),
+        'hour_capacity': pa.Column('int64', pa.Check.gt(0)),
+        'lanes': pa.Column('int64', pa.Check.gt(0)),
+        'hbefa_speed': pa.Column('int64', pa.Check.gt(0)),
+        'speed': pa.Column('int64', pa.Check.gt(0)),
+        'hbefa_gradient': pa.Column(str, pa.Check.isin(HBEFA_GRADIENTS)),
+        'dtv_SUM': pa.Column(float, pa.Check.gt(0)),
+        'dtv_PC': pa.Column(float, _non_negative),
+        'dtv_LCV': pa.Column(float, _non_negative),
+        'dtv_HGV': pa.Column(float, _non_negative),
+        'visum_length_km': pa.Column(float, _non_negative),
+        'crs': pa.Column(str),
+        'geometry': pa.Column(object, pa.Check(_is_wkb, error='geometry must be WKB')),
+    },
+    unique=['traffic_model', 'road_link_id', 'from_node'],
+    strict=True,
+    ordered=True,
+    coerce=True,
+)
+
+# One row per traffic zone with daily vehicle starts. HGV starts are optional per model.
+ZONES = pa.DataFrameSchema(
+    {
+        'traffic_model': pa.Column(str, pa.Check.str_matches(r'^visum\d{4}$')),
+        'zone_id': pa.Column('int64'),
+        'file_row': pa.Column('int64', pa.Check.ge(0)),
+        'PC_starts': pa.Column(float, _non_negative),
+        'LCV_starts': pa.Column(float, _non_negative),
+        'HGV_starts': pa.Column(float, _non_negative, nullable=True),
+        'crs': pa.Column(str),
+        'geometry': pa.Column(object, pa.Check(_is_wkb, error='geometry must be WKB')),
+    },
+    unique=['traffic_model', 'zone_id'],
+    strict=True,
+    ordered=True,
+    coerce=True,
+)

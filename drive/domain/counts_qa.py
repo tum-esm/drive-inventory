@@ -58,6 +58,22 @@ def sqv(observed: np.ndarray, model: np.ndarray, f: float = 10000.0) -> np.ndarr
     return 1 / (1 + np.sqrt((model - observed) ** 2 / (f * observed)))
 
 
+def link_attributes(links: pd.DataFrame) -> pd.DataFrame:
+    """Road type and DTV per road_link_id, from LINKS rows (usually one row per direction).
+
+    DTVs are summed per id. If the rows of an id disagree on the road type, the last row wins
+    (as in v1) and the id is flagged in `road_type_ambiguous`.
+
+    Returns:
+        pd.DataFrame: indexed by road_link_id with road_type, road_type_ambiguous, dtv_*
+    """
+    grouped = links.groupby('road_link_id')
+    attributes = grouped[['dtv_SUM', 'dtv_PC', 'dtv_LCV', 'dtv_HGV']].sum()
+    attributes.insert(0, 'road_type', grouped['road_type'].last())
+    attributes.insert(1, 'road_type_ambiguous', grouped['road_type'].nunique() > 1)
+    return attributes
+
+
 def link_volumes(raw_counts: pd.DataFrame,
                  counter_links: pd.DataFrame,
                  link_attributes: pd.DataFrame,
@@ -67,7 +83,7 @@ def link_volumes(raw_counts: pd.DataFrame,
     Args:
         raw_counts: RAW_COUNTS rows
         counter_links: COUNTER_LINKS rows of one traffic model
-        link_attributes: io.visum.read_link_attributes of the same model
+        link_attributes: link_attributes() of the same model
         day_types: domain.calendar.combined_day_types, must cover all dates
 
     Returns:
@@ -114,7 +130,7 @@ def qa_link_counts(volume: pd.DataFrame,
 
     Args:
         volume: output of link_volumes
-        link_attributes: io.visum.read_link_attributes (DTVs for the SQV)
+        link_attributes: link_attributes() (DTVs for the SQV)
         params: thresholds and reference settings
 
     Returns:

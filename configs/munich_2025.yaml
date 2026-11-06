@@ -6,12 +6,39 @@ paths:
   store: restricted_input/drive.duckdb
   calendar: auxiliary/calender_18to26.xlsx
 
-# VISUM models; counter -> link matchings are stored per model for links that exist in it
+# VISUM models: raw exports; counter -> link matchings are stored per model for links that exist in it
 traffic_models:
   visum2019:
-    links: restricted_input/traffic_model_2019/visum_links_2019.gpkg
+    links: restricted_input/traffic_model_2019/analyse_2019_link.SHP
+    zones: restricted_input/traffic_model_2019/analyse_2019_zone.SHP
+    crs: EPSG:25832
+    zone_columns: {qv_pkw: PC_starts, qv_lkw_k: LCV_starts}
   visum2025:
-    links: restricted_input/traffic_model_2025/visum_links_2025.gpkg
+    links: restricted_input/traffic_model_2025/analyse_2025_link.SHP
+    zones: restricted_input/traffic_model_2025/analyse_2025_zone.SHP
+    crs: EPSG:25832
+    # shapefile field names are cut to 10 characters
+    link_columns:
+      Kfz_Bela~1: SUMME_KFZ
+      VOLVEH_T~2: BEL_LKW_G
+      VOLVEH_T~3: BEL_LKW_K
+      VOLVEH_T~4: BEL_LKW_M
+      VOLVEH_T~5: BEL_PKW
+    zone_columns: {OTRAFFIC_P: PC_starts, OTRAFFIC~7: LCV_starts, OTRAFFIC~8: HGV_starts}
+
+# Conversion of the Munich VISUM model to HBEFA road types (model documentation, v1 preprocessing 21/21v2)
+visum:
+  min_dtv: 1
+  road_types:
+    - {typeno: [100, 199], road_type: Motorway-Nat}                                 # Autobahnen
+    - {typeno: [200, 499], min_speed: 70, road_type: TrunkRoad/Primary-National}    # Bundes-, Staats-, Kreisstrassen
+    - {typeno: [200, 499], road_type: Distributor/Secondary}
+    - {typeno: [500, 699], road_type: Distributor/Secondary}                        # Gemeinde-, Hauptstrassen
+    - {typeno: [700, 799], road_type: Access-residential}                           # Erschliessungsstrassen
+    - {typeno: [800, 899], road_type: TrunkRoad/Primary-City}                       # Mittlerer Ring
+  excluded_typeno:
+    - [0, 10]       # closed and fictitious links, foot and cycle paths
+    - [900, 999]    # public transport links
 
 ingest:
   # Preprocessed counting data (outputs of data_preprocessing/11 and 12), 2018-2025.
@@ -49,4 +76,6 @@ counts_qa:
 # Road types with too few counting stations are scaled like Distributor/Secondary
 scaling_road_types:
   Access-residential: Distributor/Secondary
+  Local/Collector: Distributor/Secondary
+  Motorway-City: Motorway-Nat
   TrunkRoad/Primary-National: Distributor/Secondary

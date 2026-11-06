@@ -14,7 +14,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import duckdb
+import geopandas as gpd
 import pandas as pd
+import shapely
 
 from drive.schemas import COUNT_KEY, EF_KEY, HOURS
 
@@ -76,6 +78,40 @@ CREATE TABLE IF NOT EXISTS emission_factors (
     traffic_scenario  VARCHAR NOT NULL,
     country           VARCHAR NOT NULL
 );
+CREATE TABLE IF NOT EXISTS links (
+    batch_id          BIGINT NOT NULL,
+    traffic_model     VARCHAR NOT NULL,
+    road_link_id      BIGINT NOT NULL,
+    from_node         BIGINT NOT NULL,
+    to_node           BIGINT NOT NULL,
+    file_row          BIGINT NOT NULL,
+    typeno            BIGINT NOT NULL,
+    road_type         VARCHAR NOT NULL,
+    scaling_road_type VARCHAR NOT NULL,
+    hour_capacity     BIGINT NOT NULL,
+    lanes             BIGINT NOT NULL,
+    hbefa_speed       BIGINT NOT NULL,
+    speed             BIGINT NOT NULL,
+    hbefa_gradient    VARCHAR NOT NULL,
+    dtv_SUM           DOUBLE NOT NULL,
+    dtv_PC            DOUBLE NOT NULL,
+    dtv_LCV           DOUBLE NOT NULL,
+    dtv_HGV           DOUBLE NOT NULL,
+    visum_length_km   DOUBLE NOT NULL,
+    crs               VARCHAR NOT NULL,
+    geometry          BLOB NOT NULL
+);
+CREATE TABLE IF NOT EXISTS zones (
+    batch_id      BIGINT NOT NULL,
+    traffic_model VARCHAR NOT NULL,
+    zone_id       BIGINT NOT NULL,
+    file_row      BIGINT NOT NULL,
+    PC_starts     DOUBLE NOT NULL,
+    LCV_starts    DOUBLE NOT NULL,
+    HGV_starts    DOUBLE,
+    crs           VARCHAR NOT NULL,
+    geometry      BLOB NOT NULL
+);
 """
 
 # table -> key that identifies a row across batches (latest batch wins)
@@ -83,6 +119,8 @@ _KEYS = {
     'counts': COUNT_KEY,
     'counter_links': ['source', 'detector_id', 'traffic_model'],
     'emission_factors': EF_KEY,
+    'links': ['traffic_model', 'road_link_id', 'from_node'],
+    'zones': ['traffic_model', 'zone_id'],
 }
 
 
@@ -233,6 +271,46 @@ def read_emission_factors(store: Path,
             raise ValueError(f'Emission factor table {table} lacks the pollutants {missing}')
         df = df[df['pollutant'].isin(pollutants)].reset_index(drop=True)
     return df
+
+
+def _read_model_snapshot(store: Path, table: str, traffic_model: str, data_version: DataVersion) -> pd.DataFrame:
+    """All rows of the latest batch of one traffic model.
+
+    A traffic model export is a whole snapshot, so its latest batch replaces earlier ones
+    completely. Per-key reads would keep rows that a newer export removed.
+    """
+    version = resolve_version(store, data_version)
+    missing = f'No {table} of {traffic_model} in {store} up to batch {version}, run `drive ingest visum` first'
+    with _connect_read(store) as con:
+        try:
+            frame = con.execute(f"""
+                SELECT * FROM {table} WHERE traffic_model = ? AND batch_id = (
+                    SELECT max(batch_id) FROM {table} WHERE traffic_model = ? AND batch_id <= ?
+                ) ORDER BY file_row""", [traffic_model, traffic_model, version]).df()
+        except duckdb.CatalogException as error:
+            raise ValueError(missing) from error
+    if frame.empty:
+        raise ValueError(missing)
+    frame['geometry'] = frame['geometry'].map(bytes)
+    return frame
+
+
+def read_links(store: Path, traffic_model: str, data_version: DataVersion = None) -> gpd.GeoDataFrame:
+    """Links of one traffic model (contract drive.schemas.LINKS plus batch_id), as a GeoDataFrame."""
+    return _to_geo(_read_model_snapshot(store, 'links', traffic_model, data_version))
+
+
+def read_zones(store: Path, traffic_model: str, data_version: DataVersion = None) -> gpd.GeoDataFrame:
+    """Zones of one traffic model (contract drive.schemas.ZONES plus batch_id), as a GeoDataFrame."""
+    return _to_geo(_read_model_snapshot(store, 'zones', traffic_model, data_version))
+
+
+def _to_geo(frame: pd.DataFrame) -> gpd.GeoDataFrame:
+    crs = frame['crs'].unique()
+    if len(crs) != 1:
+        raise ValueError(f'Expected one CRS per batch, got {list(crs)}')
+    geometry = shapely.from_wkb(frame['geometry'].to_numpy())
+    return gpd.GeoDataFrame(frame.drop(columns=['crs', 'geometry']), geometry=geometry, crs=crs[0])
 
 
 def read_batches(store: Path) -> pd.DataFrame:

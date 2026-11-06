@@ -6,9 +6,8 @@ from drive import store
 from drive.config import DriveConfig
 from drive.domain.activity import Activity
 from drive.domain.calendar import combined_day_types
-from drive.domain.counts_qa import QAParams, QAReport, link_volumes, qa_link_counts
+from drive.domain.counts_qa import QAParams, QAReport, link_attributes, link_volumes, qa_link_counts
 from drive.io.calendar_excel import read_calendar
-from drive.io.visum import read_link_attributes
 
 
 def _require(config: DriveConfig):
@@ -35,7 +34,7 @@ def load_link_counts(config: DriveConfig) -> tuple[pd.DataFrame, QAReport, int]:
     raw = store.read_counts(config.paths.store, version, metric='volume',
                             start=qa.period_start.isoformat(), end=qa.period_end.isoformat())
     links = store.read_counter_links(config.paths.store, run.traffic_model, version)
-    attributes = read_link_attributes(config.traffic_models[run.traffic_model].links)
+    attributes = link_attributes(store.read_links(config.paths.store, run.traffic_model, version))
 
     params = QAParams(reference_year=run.reference_year,
                       reference_day_type=run.reference_day_type,

@@ -8,7 +8,8 @@ from drive.config import DriveConfig, load_config
 from drive.io import hbefa
 from drive.io.counts_preprocessed import read_preprocessed_counts
 from drive.io.visum import read_links, read_zones
-from drive.pipeline import compute_hot_emissions, hot_results
+from drive.domain.kernel import scaling_factors
+from drive.pipeline import compute_hot_emissions, hot_profile, hot_results
 
 
 def _read_model_links(config: DriveConfig, model: str):
@@ -99,10 +100,14 @@ def _run(args: argparse.Namespace) -> int:
     config = load_config(args.config)
     run = compute_hot_emissions(config)
     results = hot_results(run)
+    profile = hot_profile(run, config)
     config.paths.results.mkdir(parents=True, exist_ok=True)
-    name = (f'hot_{config.run.traffic_model}_{config.run.start.year}_hbefa{config.run.hbefa_version}'
-            f'_batch{run.version}.parquet')
+    stem = f'{config.run.traffic_model}_{config.run.start.year}_hbefa{config.run.hbefa_version}_batch{run.version}'
+    name = f'hot_{stem}.parquet'
     results.to_parquet(config.paths.results / name)
+    profile.to_parquet(config.paths.results / f'hot_profile_{stem}.parquet')
+    scaling_factors(profile.rename(columns={'emission_g': 'emission'})) \
+        .to_csv(config.paths.results / f'hot_timeprofile_{stem}.csv', index=False)
     timing = ', '.join(f'{stage} {value:.1f} s' for stage, value in run.seconds.items())
     print(f'{config.paths.results / name}: {len(results)} rows, store batch {run.version}')
     print(f'Time: {timing}; links with negative volumes: {run.hot.negative_volume_links}')

@@ -11,7 +11,8 @@ from drive.config import DriveConfig
 from drive.domain.activity import Activity
 from drive.domain.calendar import combined_day_types
 from drive.domain.counts_qa import QAParams, QAReport, link_attributes, link_volumes, qa_link_counts
-from drive.domain.kernel import HotEmissions, KernelParams, build_ef_array, hot_emissions, share_corrections
+from drive.domain.kernel import (EfTable, HotEmissions, KernelParams, build_ef_table, hot_emissions, profile_frame,
+                                 scaling_factors, share_corrections)
 from drive.io.calendar_excel import read_calendar
 
 
@@ -100,6 +101,8 @@ class HotRun:
     links: gpd.GeoDataFrame  # the links of the run after clipping, with road_link_id, from_node, piece
     corrections: pd.DataFrame
     hot: HotEmissions
+    ef: EfTable
+    dates: pd.DatetimeIndex
     version: int  # store batch id the data was read at
     report: QAReport
     seconds: dict[str, float]  # wall time per stage
@@ -135,13 +138,21 @@ def compute_hot_emissions(config: DriveConfig) -> HotRun:
     params = kernel_params(config)
     corrections = share_corrections(links, activity.vehicle_shares, load_day_types(config), run.reference_year,
                                     run.reference_day_type)
-    ef = build_ef_array(links, load_hot_factors(config, run.start.year, version), params)
+    ef = build_ef_table(links, load_hot_factors(config, run.start.year, version), params)
     seconds['links and factors'] = time.perf_counter() - start
 
     start = time.perf_counter()
-    hot = hot_emissions(links, corrections, activity, pd.date_range(run.start, run.end), ef, params)
+    dates = pd.date_range(run.start, run.end)
+    hot = hot_emissions(links, corrections, activity, dates, ef, params,
+                        profile_weights={'length_km': links.length.to_numpy() / 1000})
     seconds['kernel'] = time.perf_counter() - start
-    return HotRun(links, corrections, hot, version, report, seconds)
+    return HotRun(links, corrections, hot, ef, dates, version, report, seconds)
+
+
+def hot_profile(run: HotRun, config: DriveConfig) -> pd.DataFrame:
+    """Hourly emissions in g per road type, vehicle class and component, length-weighted over all roads."""
+    return profile_frame(run.hot.profiles['length_km'], run.dates, run.ef, kernel_params(config)) \
+        .rename(columns={'emission': 'emission_g'})
 
 
 def hot_results(run: HotRun) -> pd.DataFrame:

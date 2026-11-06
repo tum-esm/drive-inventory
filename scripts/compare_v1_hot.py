@@ -6,6 +6,7 @@ Usage: uv run python scripts/compare_v1_hot.py [configs/munich_2025.yaml]
    TrafficCounts, see compare_v1_counts.py), and the links with their share corrections come
    from the baseline. Every link and column must match within the tolerance. The kernel's own
    share corrections are compared with the baseline's as a separate check.
+   The hourly profile with v1's definition must match v1's hourly worker on sample days.
 2. Full chain from the store: clipped links must match the baseline row by row. Emissions may
    differ only through the known count differences (BASt -1 markers, compare_v1_counts.py), so
    the differences are reported per road type, vehicle class and component.
@@ -25,13 +26,17 @@ from compare_v1_counts import load_v1, marker_link_classes  # noqa: E402
 from drive import store  # noqa: E402
 from drive.config import load_config  # noqa: E402
 from drive.domain.activity import Activity  # noqa: E402
-from drive.domain.kernel import build_ef_array, hot_emissions, share_corrections  # noqa: E402
+from drive.domain.kernel import (build_ef_table, hot_emissions, profile_frame, scaling_factors,  # noqa: E402
+                                 share_corrections)
 from drive.pipeline import (compute_hot_emissions, kernel_params, load_day_types, load_hot_factors,  # noqa: E402
                             load_link_counts)
 
 BASELINE = 'inventory/baselines/v1.3-gradientfix/linesource_Munich_2025_hbefa501007_specific_visum2025.gpkg'
 YEAR = 2025
 RTOL, ATOL = 1e-9, 1e-9
+V1_PROFILE = 'inventory/baselines/v1.1-asis/GNFR_F_hot_timeprofile_2025.csv'
+# a normal weekday, a Saturday, a Sunday and a day in the summer vacation
+PROFILE_DAYS = ['2025-03-04', '2025-03-08', '2025-03-09', '2025-08-13']
 CHAIN_LIMIT_PERCENT = 0.01  # per road type x vehicle class x component
 
 
@@ -51,9 +56,10 @@ def check_kernel(config, params, baseline: pd.DataFrame) -> bool:
         print(f'{column}: {(~ok).sum()} of {len(ok)} links differ')
 
     start = time.perf_counter()
-    ef = build_ef_array(baseline, factors, params)
+    ef = build_ef_table(baseline, factors, params)
     built = time.perf_counter()
-    result = hot_emissions(baseline, baseline[['hgv_corr', 'lcv_corr']], activity, dates, ef, params)
+    weights = {'length_km': baseline.length.to_numpy() / 1000, 'v1': np.ones(len(baseline))}
+    result = hot_emissions(baseline, baseline[['hgv_corr', 'lcv_corr']], activity, dates, ef, params, weights)
     done = time.perf_counter()
     print(f'Time: factors {built - start:.1f} s, {len(dates)} days on {len(baseline)} links {done - built:.1f} s; '
           f'links with negative volumes: {result.negative_volume_links}')
@@ -65,7 +71,67 @@ def check_kernel(config, params, baseline: pd.DataFrame) -> bool:
           f'{np.nanmax(relative):.2e}')
     for row, column in list(zip(*np.nonzero(different)))[:10]:
         print(f'  link row {row}, {result.emissions.columns[column]}: {new[row, column]} vs {old[row, column]}')
-    return corrections_ok and not different.any()
+    profile_ok = check_profiles(config, params, baseline, activity, result, ef, dates)
+    return corrections_ok and not different.any() and profile_ok
+
+
+def check_profiles(config, params, baseline, activity, result, ef, dates) -> bool:
+    """Profiles against the annual totals and v1's hourly worker, and v1's definition against the new one."""
+    length = baseline.length.to_numpy() / 1000
+    annual = result.emissions.to_numpy() * length[:, None]
+    total = result.profiles['length_km'].sum(axis=(0, 1)).ravel()
+    closes = np.isclose(total, annual.sum(axis=0), rtol=RTOL)
+    print(f'Profile sums to the annual totals: {closes.all()} (largest relative difference '
+          f'{np.abs(total / annual.sum(axis=0) - 1).max():.2e})')
+
+    sys.path.append(str(Path(__file__).resolve().parents[1] / 'utils'))
+    from hbefa_hot_emissions import HbefaHotEmissions  # v1, flat import by convention
+    from hot_emission_process import process_hourly_emissions
+    from traffic_counts import TrafficCounts
+
+    v1_rows = baseline[baseline['road_type'] != 'Access-residential'].drop(columns='geometry')
+    cycles = TrafficCounts(reference_year=config.run.reference_year)
+    hbefa = HbefaHotEmissions(components=params.components, vehicle_classes=params.vehicle_classes,
+                              ef_type='EFA_weighted', year=str(YEAR), hbefa_version=config.run.hbefa_version)
+    frame = profile_frame(result.profiles['v1'], dates, ef, params)
+    frame = frame[frame['road_type'] != 'Access-residential']
+    worker_ok = True
+    for day in PROFILE_DAYS:
+        start = time.perf_counter()
+        v1 = pd.DataFrame(process_hourly_emissions(day, v1_rows.to_dict('records'), cycles, hbefa)).sum(axis=1)
+        seconds = time.perf_counter() - start
+        v1.index.names = ['vehicle_class', 'component', 'hour']
+        v2 = frame[frame['time'].dt.strftime('%Y-%m-%d') == day].assign(hour=lambda f: f['time'].dt.hour) \
+            .groupby(['vehicle_class', 'component', 'hour'])['emission'].sum()
+        v1 = v1.reindex(v2.index)
+        close = np.isclose(v2, v1, rtol=RTOL, atol=ATOL)
+        worker_ok &= bool(close.all()) and len(v2) == 24 * len(params.vehicle_classes) * len(params.components)
+        zero = int((v1 == 0).sum())
+        print(f'  {day}: {(~close).sum()} of {len(v2)} values differ from v1\'s hourly worker, {zero} are zero in v1, '
+              f'largest relative difference {(np.abs(v2 - v1) / v1.abs().where(v1 != 0)).max():.2e} ({seconds:.0f} s in v1)')
+
+    v1_factors = scaling_factors(frame)
+    new_factors = scaling_factors(profile_frame(result.profiles['length_km'], dates, ef, params))
+    old_file = pd.read_csv(config.paths.data_root / V1_PROFILE, parse_dates=['timestamp'])
+    key = ['component', 'timestamp']
+    merged = new_factors.merge(v1_factors, on=key, suffixes=('_new', '_v1')) \
+        .merge(old_file[key + ['scaling_factor']].rename(columns={'scaling_factor': 'scaling_factor_file'}), on=key)
+    print(f'Hourly scaling factors, {len(merged)} rows:')
+    print('  old file vs v1 definition now: largest |difference| '
+          f'{(merged["scaling_factor_file"] - merged["scaling_factor_v1"]).abs().max():.4f}, mean '
+          f'{(merged["scaling_factor_file"] - merged["scaling_factor_v1"]).abs().mean():.4f}')
+    table = []
+    for component, group in merged.groupby('component'):
+        ratio = group['scaling_factor_new'] / group['scaling_factor_v1']
+        month = group.groupby(group['timestamp'].dt.month)[['scaling_factor_new', 'scaling_factor_v1']].mean()
+        hour = group.groupby(group['timestamp'].dt.hour)[['scaling_factor_new', 'scaling_factor_v1']].mean()
+        table.append({'component': component, 'mean_abs_diff': (group['scaling_factor_new'] - group['scaling_factor_v1']).abs().mean(),
+                      'ratio_p1': ratio.quantile(0.01), 'ratio_p99': ratio.quantile(0.99),
+                      'monthly_max_%': ((month['scaling_factor_new'] / month['scaling_factor_v1'] - 1) * 100).abs().max(),
+                      'hour_of_day_max_%': ((hour['scaling_factor_new'] / hour['scaling_factor_v1'] - 1) * 100).abs().max()})
+    print('  new definition vs v1 definition:')
+    print(pd.DataFrame(table).round(4).to_string(index=False))
+    return bool(closes.all()) and worker_ok
 
 
 def check_chain(config, baseline: gpd.GeoDataFrame) -> bool:
@@ -133,7 +199,7 @@ def check_markers(config, params, baseline: pd.DataFrame) -> bool:
         corrections = share_corrections(baseline, activity.vehicle_shares, day_types, run.reference_year, run.reference_day_type)
         factors = load_hot_factors(config, YEAR, store.resolve_version(config.paths.store, run.data_version))
         dates = pd.date_range(f'{YEAR}-01-01', f'{YEAR}-12-31')
-        return hot_emissions(baseline, corrections, activity, dates, build_ef_array(baseline, factors, params), params) \
+        return hot_emissions(baseline, corrections, activity, dates, build_ef_table(baseline, factors, params), params) \
             .emissions.to_numpy()
     new, old = emissions(v2_rows), emissions(v1_rows)
     different = ~np.isclose(new, old, rtol=RTOL, atol=ATOL)

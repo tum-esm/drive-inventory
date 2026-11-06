@@ -2,7 +2,9 @@
 
 For one link the traffic situation depends only on the level of service (LOS) class, and
 emissions are linear in volume. So the kernel sums annual volume per (link, LOS, vehicle class)
-day by day, and applies the emission factors once at the end.
+day by day, and applies the emission factors once at the end. Hourly profiles work the same way:
+links with the same road type, speed and gradient share their factors, so volume is summed per
+such group before the factors are applied.
 
 Behaviour kept from v1 for comparability (spec §5):
 - the hot ambient pattern is fixed (R33 in the backlog)
@@ -35,11 +37,22 @@ class KernelParams:
     area_type: str = 'Urban'
 
 
+@dataclass(frozen=True)
+class EfTable:
+    """Emission factors of the links of a run, stored once per group of links that share them."""
+    by_group: np.ndarray  # [group, LOS, vehicle class, component]
+    group_of_link: np.ndarray  # group per link
+    road_type_of_group: np.ndarray  # position in `road_types` per group
+    road_types: list[str]
+
+
 @dataclass
 class HotEmissions:
     emissions: pd.DataFrame  # g/km per link, columns <vehicle class>_<component>, index as `links`
     annual_volume: np.ndarray  # vehicles per [link, LOS, vehicle class]
     negative_volume_links: int
+    # weight name -> weighted emissions per [hour, road type, vehicle class, component]
+    profiles: dict[str, np.ndarray]
 
 
 def share_corrections(links: pd.DataFrame,
@@ -107,8 +120,8 @@ def traffic_situation(area_type: str, road_type: str, speed: int, los: int) -> s
     return f'{_AREA_PREFIX[area_type]}/{_ROAD_TYPE_NAMES[road_type]}/{speed}/{SERVICE_CLASSES[los]}'
 
 
-def build_ef_array(links: pd.DataFrame, factors: pd.DataFrame, params: KernelParams) -> np.ndarray:
-    """Emission factors per [link, LOS, vehicle class, component].
+def build_ef_table(links: pd.DataFrame, factors: pd.DataFrame, params: KernelParams) -> EfTable:
+    """Emission factors of all links, LOS classes, vehicle classes and components.
 
     Args:
         links: road_type, hbefa_speed, hbefa_gradient per link
@@ -139,7 +152,8 @@ def build_ef_array(links: pd.DataFrame, factors: pd.DataFrame, params: KernelPar
     shape = (len(groups), N_LOS, len(params.vehicle_classes), len(params.components))
     by_group = values.to_numpy().reshape(shape)
     group_of_link = links[attributes].merge(groups.assign(_group=range(len(groups))), on=attributes, how='left')
-    return by_group[group_of_link['_group'].to_numpy()]
+    codes, road_types = pd.factorize(groups['road_type'])
+    return EfTable(by_group, group_of_link['_group'].to_numpy(), codes, list(road_types))
 
 
 def _day_inputs(activity: Activity,
@@ -166,19 +180,23 @@ def hot_emissions(links: pd.DataFrame,
                   corrections: pd.DataFrame,
                   activity: Activity,
                   dates: pd.DatetimeIndex,
-                  ef: np.ndarray,
-                  params: KernelParams) -> HotEmissions:
+                  ef: EfTable,
+                  params: KernelParams,
+                  profile_weights: dict[str, np.ndarray] | None = None) -> HotEmissions:
     """Hot emissions per link over the given dates, level-of-service specific.
 
     Args:
         links: dtv_SUM, scaling_road_type, road_type, hour_capacity per link
         corrections: see share_corrections
         dates: the days to sum, usually one year
-        ef: see build_ef_array, for the same links
+        ef: see build_ef_table, for the same links
+        profile_weights: name -> weight per link. Each gives an hourly profile, the sum of
+            g/km x weight per road type. Link length in km gives emissions in g.
 
     Returns:
         HotEmissions, in g/km per link
     """
+    profile_weights = profile_weights or {}
     n = len(links)
     vehicles = params.vehicle_classes
     road_type_codes, road_types = pd.factorize(links['scaling_road_type'])
@@ -192,17 +210,58 @@ def hot_emissions(links: pd.DataFrame,
     link_offset = np.arange(n)[:, None] * N_LOS
 
     annual = np.zeros((n * N_LOS, len(vehicles)))
-    for date in dates:
+    n_groups = len(ef.by_group)
+    group_offset = ef.group_of_link[:, None] * N_LOS
+    hour_offset = np.arange(24)[None, :] * n_groups * N_LOS
+    n_cells = 24 * n_groups * N_LOS
+    profiles = {name: np.zeros((len(dates) * 24, len(ef.road_types), len(vehicles), len(params.components)))
+                for name in profile_weights}
+
+    for d, date in enumerate(dates):
         scaling, shares, cycle = _day_inputs(activity, date, road_types, vehicles)
         day = daily_volumes(dtv * scaling[road_type_codes], shares[road_type_codes], hgv_corr, lcv_corr, vehicles)
         hourly = day[:, None, :] * cycle[None, :, :]
-        positions = (link_offset + los_classes(hourly @ car_units, capacity, thresholds)).ravel()
+        los = los_classes(hourly @ car_units, capacity, thresholds)
+        positions = (link_offset + los).ravel()
+        cells = (group_offset + los + hour_offset).ravel()
         for v in range(len(vehicles)):
             annual[:, v] += np.bincount(positions, weights=hourly[:, :, v].ravel(), minlength=n * N_LOS)
+        for name, weight in profile_weights.items():
+            weighted = hourly * weight[:, None, None]
+            cell_volume = np.stack([np.bincount(cells, weights=weighted[:, :, v].ravel(), minlength=n_cells)
+                                    for v in range(len(vehicles))], axis=-1)
+            cell_volume = cell_volume.reshape(24, n_groups, N_LOS, len(vehicles))
+            by_group = np.einsum('hgsv,gsvc->hgvc', cell_volume, ef.by_group)
+            for r in range(len(ef.road_types)):
+                profiles[name][d * 24:(d + 1) * 24, r] = by_group[:, ef.road_type_of_group == r].sum(axis=1)
 
     volume = annual.reshape(n, N_LOS, len(vehicles))
-    emissions = np.einsum('lsv,lsvc->lvc', volume, ef)
+    emissions = np.einsum('lsv,lsvc->lvc', volume, ef.by_group[ef.group_of_link])
     columns = [f'{v}_{c}' for v in vehicles for c in params.components]
     return HotEmissions(emissions=pd.DataFrame(emissions.reshape(n, -1), index=links.index, columns=columns),
                         annual_volume=volume,
-                        negative_volume_links=int((volume < 0).any(axis=(1, 2)).sum()))
+                        negative_volume_links=int((volume < 0).any(axis=(1, 2)).sum()),
+                        profiles=profiles)
+
+
+def profile_frame(profile: np.ndarray,
+                  dates: pd.DatetimeIndex,
+                  ef: EfTable,
+                  params: KernelParams) -> pd.DataFrame:
+    """Long table of a profile: time (local wall clock), road_type, vehicle_class, component, emission."""
+    times = pd.DatetimeIndex(np.repeat(dates.to_numpy(), 24)) + pd.to_timedelta(np.tile(np.arange(24), len(dates)), unit='h')
+    index = pd.MultiIndex.from_product([times, ef.road_types, params.vehicle_classes, params.components],
+                                       names=['time', 'road_type', 'vehicle_class', 'component'])
+    return pd.DataFrame({'emission': profile.ravel()}, index=index).reset_index()
+
+
+def scaling_factors(profile: pd.DataFrame) -> pd.DataFrame:
+    """Temporal profile as v1 stores it: hourly emission over the year's mean, per component.
+
+    Args:
+        profile: see profile_frame
+    """
+    hourly = profile.groupby(['component', 'time'], as_index=False)['emission'].sum()
+    hourly['scaling_factor'] = hourly['emission'] / hourly.groupby('component')['emission'].transform('mean')
+    return pd.DataFrame({'year': hourly['time'].dt.year, 'component': hourly['component'],
+                         'timestamp': hourly['time'], 'scaling_factor': hourly['scaling_factor']})

@@ -38,6 +38,7 @@ from drive.pipeline import (compute_hot_emissions, kernel_params, load_day_types
 BASELINE = 'inventory/baselines/v1.3-gradientfix/linesource_Munich_2025_hbefa501007_specific_visum2025.gpkg'
 YEAR = 2025
 RTOL, ATOL = 1e-9, 1e-9
+GEOMETRY_TOLERANCE_M = 1e-6  # clipped coordinates differ by up to 1e-9 m between GEOS versions
 AGGREGATED_BASELINE = 'inventory/baselines/v1.1-asis/linesource_Munich_2025_hbefa501007_aggregated_visum2025.gpkg'
 V1_PROFILE = 'inventory/baselines/v1.1-asis/GNFR_F_hot_timeprofile_2025.csv'
 # a normal weekday, a Saturday, a Sunday and a day in the summer vacation
@@ -155,7 +156,7 @@ def check_chain(config, baseline: gpd.GeoDataFrame) -> bool:
         ok &= not different.any()
         if different.any():
             print(f'  {column} differs in {different.sum()} rows')
-    same_geometry = links.geometry.reset_index(drop=True).geom_equals_exact(baseline.geometry, 0)
+    same_geometry = links.geometry.reset_index(drop=True).geom_equals_exact(baseline.geometry, GEOMETRY_TOLERANCE_M)
     ok &= bool(same_geometry.all())
     print(f'Link attributes match: {ok}; rows with different geometry: {(~same_geometry).sum()}')
 

@@ -1,5 +1,9 @@
 """Pipeline: the only place where config, store, adapters and domain code meet (spec §4.3)."""
 
+import time
+from dataclasses import dataclass
+
+import geopandas as gpd
 import pandas as pd
 
 from drive import store
@@ -7,7 +11,7 @@ from drive.config import DriveConfig
 from drive.domain.activity import Activity
 from drive.domain.calendar import combined_day_types
 from drive.domain.counts_qa import QAParams, QAReport, link_attributes, link_volumes, qa_link_counts
-from drive.domain.kernel import KernelParams
+from drive.domain.kernel import HotEmissions, KernelParams, build_ef_array, hot_emissions, share_corrections
 from drive.io.calendar_excel import read_calendar
 
 
@@ -89,3 +93,59 @@ def load_activity(config: DriveConfig) -> tuple[Activity, QAReport, int]:
     link_counts, report, version = load_link_counts(config)
     activity = Activity(link_counts, load_day_types(config), run.reference_year, run.reference_day_type)
     return activity, report, version
+
+
+@dataclass
+class HotRun:
+    links: gpd.GeoDataFrame  # the links of the run after clipping, with road_link_id, from_node, piece
+    corrections: pd.DataFrame
+    hot: HotEmissions
+    version: int  # store batch id the data was read at
+    report: QAReport
+    seconds: dict[str, float]  # wall time per stage
+
+
+def clip_links(links: gpd.GeoDataFrame, boundary_path) -> gpd.GeoDataFrame:
+    """Clips links to a boundary, as v1 does. A link split by the boundary gives one row per `piece`."""
+    boundary = gpd.read_file(boundary_path).to_crs(links.crs)
+    clipped = gpd.clip(links, boundary).explode(index_parts=True)
+    clipped['piece'] = clipped.index.get_level_values(1)
+    return clipped.reset_index(drop=True)
+
+
+def compute_hot_emissions(config: DriveConfig) -> HotRun:
+    """Annual hot emissions per link of the run: store -> counts QA -> Activity -> kernel."""
+    run, _ = _require(config)
+    if run.start is None or run.end is None:
+        raise ValueError('The config needs run.start and run.end')
+    if run.start.year != run.end.year:
+        raise ValueError(f'A run covers one calendar year for now, got {run.start} to {run.end}')
+
+    seconds = {}
+    start = time.perf_counter()
+    activity, report, version = load_activity(config)
+    seconds['activity'] = time.perf_counter() - start
+
+    start = time.perf_counter()
+    links = store.read_links(config.paths.store, run.traffic_model, version)
+    if config.paths.clip_boundary is not None:
+        links = clip_links(links, config.paths.clip_boundary)
+    else:
+        links = links.assign(piece=0)
+    params = kernel_params(config)
+    corrections = share_corrections(links, activity.vehicle_shares, load_day_types(config), run.reference_year,
+                                    run.reference_day_type)
+    ef = build_ef_array(links, load_hot_factors(config, run.start.year, version), params)
+    seconds['links and factors'] = time.perf_counter() - start
+
+    start = time.perf_counter()
+    hot = hot_emissions(links, corrections, activity, pd.date_range(run.start, run.end), ef, params)
+    seconds['kernel'] = time.perf_counter() - start
+    return HotRun(links, corrections, hot, version, report, seconds)
+
+
+def hot_results(run: HotRun) -> pd.DataFrame:
+    """Result table: g/km per link and piece, with the attributes needed to summarise it."""
+    keys = run.links[['road_link_id', 'from_node', 'piece', 'road_type', 'scaling_road_type']].copy()
+    keys['length_km'] = run.links.length / 1000
+    return pd.concat([keys, run.hot.emissions], axis=1)

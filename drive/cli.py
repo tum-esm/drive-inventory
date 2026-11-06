@@ -8,6 +8,7 @@ from drive.config import DriveConfig, load_config
 from drive.io import hbefa
 from drive.io.counts_preprocessed import read_preprocessed_counts
 from drive.io.visum import read_links, read_zones
+from drive.pipeline import compute_hot_emissions, hot_results
 
 
 def _read_model_links(config: DriveConfig, model: str):
@@ -94,6 +95,20 @@ def _ingest_visum(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run(args: argparse.Namespace) -> int:
+    config = load_config(args.config)
+    run = compute_hot_emissions(config)
+    results = hot_results(run)
+    config.paths.results.mkdir(parents=True, exist_ok=True)
+    name = (f'hot_{config.run.traffic_model}_{config.run.start.year}_hbefa{config.run.hbefa_version}'
+            f'_batch{run.version}.parquet')
+    results.to_parquet(config.paths.results / name)
+    timing = ', '.join(f'{stage} {value:.1f} s' for stage, value in run.seconds.items())
+    print(f'{config.paths.results / name}: {len(results)} rows, store batch {run.version}')
+    print(f'Time: {timing}; links with negative volumes: {run.hot.negative_volume_links}')
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog='drive', description='DRIVE road transport emission inventory')
     parser.add_argument('--version', action='version', version=f'drive {__version__}')
@@ -110,6 +125,10 @@ def main(argv: list[str] | None = None) -> int:
     visum = sources.add_parser('visum', help='links and zones of the models under traffic_models')
     visum.add_argument('config', help='path to the run configuration (YAML)')
     visum.set_defaults(func=_ingest_visum)
+
+    compute = commands.add_parser('run', help='compute the annual hot emissions of a run')
+    compute.add_argument('config', help='path to the run configuration (YAML)')
+    compute.set_defaults(func=_run)
 
     args = parser.parse_args(argv)
     return args.func(args)

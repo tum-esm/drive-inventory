@@ -24,6 +24,8 @@ class PathsConfig(_Strict):
     data_root: Path
     store: Path = Path('restricted_input/drive.duckdb')
     calendar: Path = Path('auxiliary/calender_18to26.xlsx')
+    clip_boundary: Path | None = None  # interim: read directly until `drive ingest boundaries` exists
+    results: Path = Path('inventory/v2')
 
 
 class TrafficModelConfig(_Strict):
@@ -67,6 +69,8 @@ class IngestConfig(_Strict):
 
 class RunConfig(_Strict):
     traffic_model: TrafficModel
+    start: date | None = None  # first and last day of the emission calculation, one calendar year for now
+    end: date | None = None
     reference_year: int  # normalisation year of the scaling, must match the traffic model year
     reference_day_type: int = 0  # normweekday
     data_version: int | datetime | None = None  # store batch id or tz-aware timestamp, None = latest
@@ -119,6 +123,9 @@ class DriveConfig(_Strict):
             raise ValueError(f'run.traffic_model {self.run.traffic_model} is not in traffic_models')
         self.paths.store = root / self.paths.store
         self.paths.calendar = root / self.paths.calendar
+        self.paths.results = root / self.paths.results
+        if self.paths.clip_boundary is not None:
+            self.paths.clip_boundary = root / self.paths.clip_boundary
         for m in self.traffic_models.values():
             m.links = root / m.links
             m.zones = root / m.zones

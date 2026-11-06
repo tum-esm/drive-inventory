@@ -12,6 +12,8 @@ import numpy as np
 from typing import Literal
 
 from traffic_counts import TrafficCounts
+import os
+
 import data_paths 
 import hbefa_requests
 
@@ -83,7 +85,7 @@ class HbefaHotEmissions:
                                    'EFA_WTW_weighted'] = 'EFA_weighted',
                  area_type: Literal['Urban', 'Motorway', 'Rural'] = 'Urban',
                  year: str = '2024', 
-                 hbefa_version: int = 501006):
+                 hbefa_version: int = 501007):
         """Imports emission factors from HBEFA-exported *.txt files and initializes 
         the class.
 
@@ -108,21 +110,23 @@ class HbefaHotEmissions:
 
         # load emission factors with explicit traffic situations
         
-        self.ef_dict = self._import_hbefa_ef(data_paths.EF_PATH  + f"{year}_hot_single_ts_hbefa{hbefa_version}.parquet", 
+        self.ef_dict = self._import_hbefa_ef(data_paths.EF_PATH  + f"{year}_hot_single_ts_v{hbefa_version}.parquet", 
                                             columns_to_keep = ['Year', 'Component', 
                                                                'VehCat', 'TrafficSit',
                                                                'Gradient', 'EFA_weighted'], 
                                             index_cols = ['Year', 'TrafficSit','VehCat',
                                                           'Gradient','Component'])
         
-        #TODO: only load aggregated emission factors if they are needed for the calculation
-        # load emission factors with aggregated traffic situations
-        self.ef_aggregated = self._import_hbefa_ef(data_paths.EF_PATH  + f"{year}_hot_aggregate_ts_hbefa{hbefa_version}.parquet",
-                                                columns_to_keep= ['Year', 'Component',
-                                                                  'VehCat', 'RoadCat',
-                                                                  'EFA_weighted'],
-                                                index_cols = ['Year', 'RoadCat',
-                                                              'VehCat','Component'])
+        # aggregated traffic situations are optional, the tables exist only for some years
+        self.ef_aggregated = None
+        aggregated_path = data_paths.EF_PATH + f"{year}_hot_aggregate_ts_v{hbefa_version}.parquet"
+        if os.path.exists(aggregated_path):
+            self.ef_aggregated = self._import_hbefa_ef(aggregated_path,
+                                                       columns_to_keep= ['Year', 'Component',
+                                                                         'VehCat', 'RoadCat',
+                                                                         'EFA_weighted'],
+                                                       index_cols = ['Year', 'RoadCat',
+                                                                     'VehCat','Component'])
     
     @property
     def vcr_thresholds(self): 
@@ -147,22 +151,17 @@ class HbefaHotEmissions:
         Returns:
             dict: emission factors
         """
-        try:
-            ef = pd.read_parquet(filepath) 
-            ef.rename(columns={'Vehicle category': 'VehCat', 'Reference year': 'Year', 'Pollutant': 'Component',
-                               'Ambient cond. pattern': 'AmbientCondPattern', 'EFA': 'EFA_weighted', 'Traffic situation': 'TrafficSit', 'Road category': 'RoadCat'}, inplace=True)
-            ef['VehCat']= ef['VehCat'].map(HbefaHotEmissions._hbefa_raw_vehicle_classes)
-            ef= ef[columns_to_keep].set_index(index_cols) # reduce to useful columns
-            assert all([c in ef.index.get_level_values('Component') for c in self.components]), \
-            "Not all components are available in the emission factor table."
-            ef_dict= ef.to_dict() # convert to dict for faster access
-            print(f'Loaded emission factors from {filepath}')
-            return ef_dict
-        
-        except Exception as e: 
-            print(f'Could not load table from {filepath}\n')
-            print(e)
-            return None
+        ef = pd.read_parquet(filepath)
+        ef.rename(columns={'Vehicle category': 'VehCat', 'Reference year': 'Year', 'Pollutant': 'Component',
+                           'Ambient cond. pattern': 'AmbientCondPattern', 'EFA': 'EFA_weighted', 'Traffic situation': 'TrafficSit', 'Road category': 'RoadCat'}, inplace=True)
+        ef['VehCat']= ef['VehCat'].map(HbefaHotEmissions._hbefa_raw_vehicle_classes)
+        ef= ef[columns_to_keep].set_index(index_cols) # reduce to useful columns
+        missing = [c for c in self.components if c not in ef.index.get_level_values('Component')]
+        if missing:
+            raise ValueError(f'{filepath} lacks the components {missing}')
+        ef_dict= ef.to_dict() # convert to dict for faster access
+        print(f'Loaded emission factors from {filepath}')
+        return ef_dict
 
 
     def calc_los_class(self, 
@@ -256,27 +255,17 @@ class HbefaHotEmissions:
                 # caclulate emissions for components and vehicle classes
                 for v in self.vehicle_classes:
                     for c in self.components:
-                        try:
-                            emission = self.ef_dict[self.ef_type][year,
-                                                                  los_hour,
-                                                                  v,
-                                                                  hbefa_gradient,
-                                                                  c] * htv_hour[v]
-                            emissions_dict[(v,c)] += emission
-                        except Exception: # catch errors from missing gradient values
-                            try:
-                                emission = self.ef_dict[self.ef_type][year,
-                                                                      los_hour,
-                                                                      v,
-                                                                      '0%',
-                                                                      c] * htv_hour[v]
-                                emissions_dict[(v,c)] += emission
-                            except Exception as e:
-                                print(road_type, hbefa_gradient, hbefa_speed)
-                                print('Exception ' + (str(e)))
-                                return 0
+                        # a missing key raises: gradients must be HBEFA strings like '+2%'
+                        emission = self.ef_dict[self.ef_type][year,
+                                                              los_hour,
+                                                              v,
+                                                              hbefa_gradient,
+                                                              c] * htv_hour[v]
+                        emissions_dict[(v,c)] += emission
                             
         elif mode == 'aggregated':
+            if self.ef_aggregated is None:
+                raise ValueError(f'No aggregated emission factor table for {self.year}')
                     # calculate emissions for each hour of the day
             for i in range(0,24):
                 # combine vehicle class and hourly traffic volume for each vehicle
@@ -354,27 +343,13 @@ class HbefaHotEmissions:
             # caclulate emissions for components and vehicle classes
             for v in self.vehicle_classes:
                 for c in self.components:
-                    try:
-                        emission = self.ef_dict[self.ef_type][year, 
-                                                              los_hour, 
-                                                              v, 
-                                                              hbefa_gradient,
-                                                              c] * htv_hour[v]
-                        emissions_dict[(v,c,i)] = emission
-
-                    except Exception: # catch errors from missing gradinent values
-                        try: 
-                            emission = self.ef_dict[self.ef_type][year,
-                                                                  los_hour, 
-                                                                  v, 
-                                                                  '0%',
-                                                                  c] * htv_hour[v]
-                            emissions_dict[(v,c,i)] = emission
- 
-                        except Exception as e:
-                            print(road_type, hbefa_gradient, hbefa_speed)
-                            print('Exception ' + (str(e)))
-                            return 0
+                    # a missing key raises: gradients must be HBEFA strings like '+2%'
+                    emission = self.ef_dict[self.ef_type][year, 
+                                                          los_hour, 
+                                                          v, 
+                                                          hbefa_gradient,
+                                                          c] * htv_hour[v]
+                    emissions_dict[(v,c,i)] = emission
         return emissions_dict
 
 

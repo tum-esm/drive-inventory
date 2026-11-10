@@ -10,7 +10,7 @@
 
 import hashlib
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import duckdb
@@ -149,6 +149,14 @@ def _connect_read(store: Path) -> duckdb.DuckDBPyConnection:
     return duckdb.connect(str(store), read_only=True)
 
 
+def _scalar(con: duckdb.DuckDBPyConnection, query: str, params: list | None = None):
+    """First value of the first row of a query that always returns a row (aggregates, sequences)."""
+    row = con.execute(query, params or []).fetchone()
+    if row is None:
+        raise RuntimeError(f'No row from {query}')
+    return row[0]
+
+
 def find_batch(store: Path, kind: str, input_sha256: str, params: dict) -> int | None:
     """Batch id of an earlier ingest of the same input with the same parameters, if any."""
     if not store.exists():
@@ -198,9 +206,9 @@ def write_batch(store: Path,
         con.execute(_DDL)
         con.execute('BEGIN TRANSACTION')
         try:
-            batch_id = con.execute("SELECT nextval('batch_id_seq')").fetchone()[0]
+            batch_id = _scalar(con, "SELECT nextval('batch_id_seq')")
             con.execute('INSERT INTO ingest_batches VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                        [batch_id, kind, source, datetime.now(timezone.utc), str(input_path), input_sha256,
+                        [batch_id, kind, source, datetime.now(UTC), str(input_path), input_sha256,
                          json.dumps(params, sort_keys=True),
                          json.dumps({t: len(df) for t, df in tables.items()}), note])
             for table, df in tables.items():
@@ -219,18 +227,16 @@ def resolve_version(store: Path, data_version: DataVersion = None) -> int:
     """Highest batch id covered by `data_version` (None = latest)."""
     with _connect_read(store) as con:
         if data_version is None:
-            row = con.execute('SELECT max(batch_id) FROM ingest_batches').fetchone()
+            batch_id = _scalar(con, 'SELECT max(batch_id) FROM ingest_batches')
         elif isinstance(data_version, datetime):
             if data_version.tzinfo is None:
                 raise ValueError('data_version timestamps must be time-zone aware')
-            row = con.execute('SELECT max(batch_id) FROM ingest_batches WHERE ingested_at <= ?',
-                              [data_version]).fetchone()
+            batch_id = _scalar(con, 'SELECT max(batch_id) FROM ingest_batches WHERE ingested_at <= ?', [data_version])
         else:
-            row = con.execute('SELECT max(batch_id) FROM ingest_batches WHERE batch_id <= ?',
-                              [data_version]).fetchone()
-    if row[0] is None:
+            batch_id = _scalar(con, 'SELECT max(batch_id) FROM ingest_batches WHERE batch_id <= ?', [data_version])
+    if batch_id is None:
         raise ValueError(f'No batches in {store} up to data_version {data_version}')
-    return row[0]
+    return batch_id
 
 
 def _read_latest(store: Path, table: str, version: int, where: str = '', params: list | None = None) -> pd.DataFrame:

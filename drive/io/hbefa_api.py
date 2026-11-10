@@ -14,7 +14,7 @@ import json
 import os
 import re
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from io import StringIO
 from pathlib import Path
 from urllib.parse import urlparse
@@ -41,10 +41,11 @@ def read_credentials(api: HbefaApi) -> tuple[str, str]:
     """E-mail and password by the names in the config: environment first, then `api.env_file`."""
     file = dotenv_values(api.env_file) if api.env_file is not None else {}
     values = {name: os.environ.get(name) or file.get(name) for name in (api.email_env, api.password_env)}
-    missing = [name for name, value in values.items() if not value]
-    if missing:
+    email, password = values[api.email_env], values[api.password_env]
+    if not email or not password:
+        missing = [name for name, value in values.items() if not value]
         raise ValueError(f'HBEFA credentials {missing} are neither in the environment nor in {api.env_file}')
-    return values[api.email_env], values[api.password_env]
+    return email, password
 
 
 def login(api: HbefaApi) -> requests.Session:
@@ -86,12 +87,13 @@ def fetch_table(session: requests.Session, api: HbefaApi, payload: dict[str, str
     url = f'{api.base_url}/efa-async/{task_id}'
     start = last_report = time.monotonic()
     failures = 0
+    problem: str | None = None  # why the last poll failed
     while True:
         now = time.monotonic()
         if now - start > api.timeout_minutes * 60:
             raise HbefaApiError(f'Job {task_id} not finished after {api.timeout_minutes} minutes')
         try:
-            if failures and problem.endswith('401'):
+            if problem is not None and problem.endswith('401'):
                 session = login(api)
             result = session.get(url, timeout=_HTTP_TIMEOUT)
             problem = f'status {result.status_code}' if result.status_code == 401 or result.status_code >= 500 else None
@@ -132,7 +134,7 @@ def build_payload(api: HbefaApi, table: HbefaTable, year: int, version: int) -> 
 def _save(raw: pd.DataFrame, file: hbefa.EfFile, payload: dict[str, str], report: dict) -> None:
     """Writes the table with a sidecar of the request. The rename makes a broken run leave no table."""
     file.path.parent.mkdir(parents=True, exist_ok=True)
-    sidecar = {'downloaded_at': datetime.now(timezone.utc).isoformat(), 'request': payload, **report}
+    sidecar = {'downloaded_at': datetime.now(UTC).isoformat(), 'request': payload, **report}
     file.path.with_suffix('.request.json').write_text(json.dumps(sidecar, indent=2, ensure_ascii=False))
     partial = file.path.with_suffix('.parquet.partial')
     raw.to_parquet(partial, index=False)

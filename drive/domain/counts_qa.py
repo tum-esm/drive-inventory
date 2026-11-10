@@ -177,7 +177,7 @@ def qa_link_counts(volume: pd.DataFrame,
     volume['completeness'] = volume['road_link_id'].map(completeness).fillna(0.0)
     volume['complete'] = volume['completeness'] > params.completeness_threshold  # R3: 0 is incomplete
 
-    volume['scaling_road_type'] = volume['road_type'].map(lambda rt: params.scaling_road_types.get(rt, rt))
+    volume['scaling_road_type'] = volume['road_type'].map(lambda rt: params.scaling_road_types.get(str(rt), rt))
 
     links = volume.groupby('road_link_id')[['valid', 'complete', 'completeness']].first()
     report.links = len(links)

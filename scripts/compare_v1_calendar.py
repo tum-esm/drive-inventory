@@ -20,9 +20,18 @@ import pandas as pd
 
 from drive import store
 from drive.config import load_config
-from drive.domain.calendar import (DAY_GROUPS, NORM_WEEKDAY, OUTLIER_GROUPS, SATURDAY, SUNDAY_HOLIDAY, VACATION_WEEKDAY,
-                                   WEEKDAY,
-                                   build_calendar, calendar_day_types, classify_days)
+from drive.domain.calendar import (
+    DAY_GROUPS,
+    NORM_WEEKDAY,
+    OUTLIER_GROUPS,
+    SATURDAY,
+    SUNDAY_HOLIDAY,
+    VACATION_WEEKDAY,
+    WEEKDAY,
+    build_calendar,
+    calendar_day_types,
+    classify_days,
+)
 from drive.io.calendar_excel import read_calendar
 from drive.io.calendar_holidays import read_holidays, read_overrides
 from drive.schemas import CALENDAR

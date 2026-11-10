@@ -24,16 +24,20 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent))
-from compare_v1_counts import load_v1, marker_link_classes  # noqa: E402
+from compare_v1_counts import load_v1, marker_link_classes
 
-from drive import store  # noqa: E402
-from drive.config import load_config  # noqa: E402
-from drive.domain.activity import Activity  # noqa: E402
-from drive.domain.kernel import (build_aggregated_ef_table, build_ef_table, hot_emissions,  # noqa: E402
-                                 profile_frame, scaling_factors,
-                                 share_corrections)
-from drive.pipeline import (compute_hot_emissions, kernel_params, load_day_types, load_hot_factors,  # noqa: E402
-                            load_link_counts)
+from drive import store
+from drive.config import load_config
+from drive.domain.activity import Activity
+from drive.domain.kernel import (
+    build_aggregated_ef_table,
+    build_ef_table,
+    hot_emissions,
+    profile_frame,
+    scaling_factors,
+    share_corrections,
+)
+from drive.pipeline import compute_hot_emissions, kernel_params, load_day_types, load_hot_factors, load_link_counts
 
 BASELINE = 'inventory/baselines/v1.3-gradientfix/linesource_Munich_2025_hbefa501007_specific_visum2025.gpkg'
 YEAR = 2025

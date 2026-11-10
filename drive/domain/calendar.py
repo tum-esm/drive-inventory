@@ -84,14 +84,15 @@ def build_calendar(region: str,
         selected = overrides[overrides['date'].isin(dates)]
         if selected['date'].duplicated().any():
             raise ValueError('Duplicate dates in the calendar overrides')
-        positions = dates.get_indexer(selected['date'])
+        positions = dates.get_indexer(pd.DatetimeIndex(selected['date']))
         current = calendar['school_holiday'].to_numpy()[positions]
-        for row, name in zip(selected.itertuples(), current):
-            if (pd.isna(row.school_holiday) and pd.isna(name)) or row.school_holiday == name:
-                raise ValueError(f'The calendar override of {row.date.date()} changes nothing, review it')
+        for day, new, name in zip(pd.DatetimeIndex(selected['date']), selected['school_holiday'], current):
+            if (pd.isna(new) and pd.isna(name)) or new == name:
+                raise ValueError(f'The calendar override of {day.date()} changes nothing, review it')
         names = selected['school_holiday'].astype(object).where(selected['school_holiday'].notna(), None)
-        calendar.iloc[positions, calendar.columns.get_loc('school_holiday')] = names.to_numpy()
-        calendar.iloc[positions, calendar.columns.get_loc('override')] = selected['reason'].to_numpy()
+        # pandas-stubs has no overload for a position array with a column position
+        calendar.iloc[positions, calendar.columns.get_loc('school_holiday')] = names.to_numpy()  # pyright: ignore[reportCallIssue, reportArgumentType]
+        calendar.iloc[positions, calendar.columns.get_loc('override')] = selected['reason'].to_numpy()  # pyright: ignore[reportCallIssue, reportArgumentType]
 
     calendar['day_type'] = classify_days(calendar['day_of_week'].to_numpy(), calendar['public_holiday'].notna().to_numpy(),
                                          calendar['school_holiday'].notna().to_numpy())

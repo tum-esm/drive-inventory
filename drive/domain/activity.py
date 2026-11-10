@@ -30,7 +30,7 @@ _REQUIRED = ['road_link_id', 'vehicle_class', 'date', 'scaling_road_type', 'day_
 
 def _fill_category(values: pd.Series, day_types: pd.Series) -> pd.Series:
     """Fills the gaps of one date-indexed series with the smoothed (year, ISO week, day type) mean."""
-    dates = values.index
+    dates = pd.DatetimeIndex(values.index)
     keys = pd.MultiIndex.from_arrays(
         [dates.year, dates.isocalendar().week.to_numpy(), day_types.reindex(dates).to_numpy()],
         names=['year', 'week', 'day_type'])
@@ -96,7 +96,7 @@ class Activity:
         self.road_types = sorted(link_counts['scaling_road_type'].unique())
 
         days = pd.date_range(self.date_start, self.date_end, name='date')
-        uncovered = days.difference(day_types.index)
+        uncovered = days.difference(pd.DatetimeIndex(day_types.index))
         if len(uncovered) > 0:
             raise ValueError(f'No day type for {len(uncovered)} dates, e.g. {list(uncovered[:3])}')
         self._day_groups = day_groups
@@ -118,8 +118,10 @@ class Activity:
         median = rows.groupby(['vehicle_class', 'scaling_road_type', 'date'])['daily_value'].median()
         median = fill_gaps(median, self._day_types)
         total = median.groupby(level=['scaling_road_type', 'date']).sum()
-        return (median / total).reorder_levels(['vehicle_class', 'scaling_road_type', 'date']) \
-            .sort_index().rename('share')
+        shares = median / total
+        # pandas-stubs only accepts level positions, pandas also takes names
+        shares = shares.reorder_levels(['vehicle_class', 'scaling_road_type', 'date'])  # pyright: ignore[reportArgumentType]
+        return shares.sort_index().rename('share')
 
     def _calc_annual_cycles(self, link_counts: pd.DataFrame) -> pd.Series:
         """Daily scaling per (scaling_road_type, date): SUM volumes normalised per link to the
@@ -190,5 +192,6 @@ class Activity:
     def get_hourly_scaling_factors(self, date: str | pd.Timestamp) -> pd.DataFrame:
         """Diurnal cycle of the date's year, month and day type, per vehicle class (without SUM)."""
         date = pd.Timestamp(date)
-        cycle = self.daily_cycles.loc[(date.year, date.month, int(self._day_types[date]))]
+        # pandas-stubs has no overload for a partial MultiIndex key
+        cycle = self.daily_cycles.loc[(date.year, date.month, int(self._day_types[date]))]  # pyright: ignore[reportCallIssue, reportArgumentType]
         return cycle.drop('SUM')

@@ -1,4 +1,4 @@
-# Known-answer tests on invented data (tests/README.md). No restricted data and no secrets are needed.
+# Lint, type check and known-answer tests on invented data (tests/README.md). No restricted data and no secrets.
 name: tests
 
 on:
@@ -20,5 +20,9 @@ jobs:
           python-version: '3.13'
       - name: Install the locked dependencies
         run: uv sync --locked
+      - name: Lint (ruff, settings in pyproject.toml)
+        run: uv run ruff check
+      - name: Type check drive/ (pyright basic mode with pandas-stubs)
+        run: uv run pyright
       - name: Run the tests
         run: uv run pytest

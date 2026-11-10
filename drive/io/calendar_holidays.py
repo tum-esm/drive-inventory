@@ -1,6 +1,7 @@
 """Public and school holidays of a region from the `holidays` package, and the override file."""
 
 from datetime import date
+from importlib.metadata import version
 from pathlib import Path
 
 import holidays
@@ -25,7 +26,7 @@ def read_holidays(country: str,
     complete = {d.year for d in school if d.month == 12}
     missing = sorted(set(years) - complete)
     if missing:
-        raise ValueError(f'holidays {holidays.__version__} has no complete school holidays '
+        raise ValueError(f'holidays {version("holidays")} has no complete school holidays '
                          f'of {country}-{subdivision} for {missing}')
     return public, school
 

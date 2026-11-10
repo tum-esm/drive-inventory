@@ -5,6 +5,7 @@ assign HBEFA road types and drop excluded types, snap gradient and speed to the 
 HBEFA, sum HGV, and map the scaling road type.
 """
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -62,7 +63,7 @@ def road_types(typeno: pd.Series, speed: pd.Series, config: VisumConfig) -> pd.S
         match = typeno.between(*rule.typeno) & result.isna()
         if rule.min_speed is not None:
             match &= speed >= rule.min_speed
-        result[match] = rule.road_type
+        result[match] = rule.road_type  # pyright: ignore[reportCallIssue, reportArgumentType]  # object Series, stubs expect float
     excluded = np.logical_or.reduce([typeno.between(*r) for r in config.excluded_typeno])
     unknown = result.isna() & ~excluded
     if unknown.any():
@@ -124,7 +125,7 @@ def read_links(path: str | Path,
         'file_row': kept['file_row'],
         'typeno': kept['typeno'],
         'road_type': kept['road_type'].astype(str),
-        'scaling_road_type': kept['road_type'].map(lambda t: scaling_road_types.get(t, t)),
+        'scaling_road_type': kept['road_type'].map(lambda t: scaling_road_types.get(str(t), t)),
         'hour_capacity': kept['CAPPRT'],
         'lanes': kept['NUMLANES'],
         'hbefa_speed': hbefa_speeds(kept['road_type'], kept['speed']),
@@ -136,7 +137,7 @@ def read_links(path: str | Path,
         'dtv_HGV': (kept['BEL_LKW_M'] + kept['BEL_LKW_G']).astype(float),
         'visum_length_km': kept['length'],
         'crs': crs,
-        'geometry': shapely.to_wkb(kept.geometry.values),
+        'geometry': shapely.to_wkb(np.asarray(kept.geometry)),
     }).reset_index(drop=True)
     links = LINKS.validate(links)
 
@@ -150,7 +151,7 @@ def read_links(path: str | Path,
                               road_type_ambiguous=sorted(ambiguous.index[ambiguous > 1].tolist()))
 
 
-def read_zones(path: str | Path, traffic_model: str, crs: str, column_names: dict[str, str]) -> pd.DataFrame:
+def read_zones(path: str | Path, traffic_model: str, crs: str, column_names: Mapping[str, str]) -> pd.DataFrame:
     """Reads a raw zone export into the ZONES contract. Starts a model doesn't map stay NaN (HGV).
 
     Raises:
@@ -168,6 +169,6 @@ def read_zones(path: str | Path, traffic_model: str, crs: str, column_names: dic
         'LCV_starts': raw['LCV_starts'],
         'HGV_starts': raw['HGV_starts'] if 'HGV_starts' in raw else float('nan'),
         'crs': crs,
-        'geometry': shapely.to_wkb(raw.geometry.values),
+        'geometry': shapely.to_wkb(np.asarray(raw.geometry)),
     })
     return ZONES.validate(zones)

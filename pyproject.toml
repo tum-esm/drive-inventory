@@ -39,8 +39,23 @@ packages = ["drive"]
 
 [dependency-groups]
 dev = [
+    "pandas-stubs>=3.1.0.261029",
+    "pyright[nodejs]>=1.1.414",
     "pytest>=9.2.0",
+    "ruff>=0.17.4",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py313"
+include = ["drive/**/*.py", "tests/**/*.py", "scripts/**/*.py"]
+
+[tool.pyright]
+include = ["drive"]
+typeCheckingMode = "basic"
+pythonVersion = "3.13"
+venvPath = "."
+venv = ".venv"

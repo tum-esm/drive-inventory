@@ -71,7 +71,7 @@ def read_preprocessed_counts(path: str | Path,
     pairs = pairs.assign(detector_id=pairs['detector_id'].astype(str),
                          road_link_id=pairs['road_link_id'].astype('int64'))
 
-    links = list()
+    links = []
     for model, link_ids in sorted(model_link_ids.items()):
         exists = pairs['road_link_id'].isin(link_ids)
         report.links_missing_in_model[model] = sorted(pairs.loc[~exists, 'road_link_id'].unique().tolist())

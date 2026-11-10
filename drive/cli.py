@@ -3,17 +3,16 @@
 import argparse
 import hashlib
 import sys
-
-import holidays
+from importlib.metadata import version
 
 from drive import __version__, store
 from drive.config import DriveConfig, load_config
 from drive.domain.calendar import build_calendar
+from drive.domain.kernel import scaling_factors
 from drive.io import hbefa, hbefa_api
 from drive.io.calendar_holidays import read_holidays, read_overrides
 from drive.io.counts_preprocessed import read_preprocessed_counts
 from drive.io.visum import read_links, read_zones
-from drive.domain.kernel import scaling_factors
 from drive.pipeline import compute_hot_emissions, hot_profile, hot_results
 
 
@@ -122,7 +121,7 @@ def _ingest_calendar(args: argparse.Namespace) -> int:
     if latest is not None and latest[1] == sha:
         print(f'{region} {c.years[0]}-{c.years[1]}: already ingested as batch {latest[0]}, skipped')
         return 0
-    source = f'holidays {holidays.__version__}'
+    source = f'holidays {version("holidays")}'
     batch = store.write_batch(config.paths.store, 'calendar', source, c.overrides or source, sha, {'region': region},
                               {'calendar': calendar})
     print(f'{region} {c.years[0]}-{c.years[1]} -> batch {batch}: {len(calendar)} days from {source}, '
@@ -133,12 +132,14 @@ def _ingest_calendar(args: argparse.Namespace) -> int:
 
 def _run(args: argparse.Namespace) -> int:
     config = load_config(args.config)
+    if config.run is None:
+        raise ValueError('No run section in the config')
     run = compute_hot_emissions(config)
     results = hot_results(run)
     profile = hot_profile(run, config)
     config.paths.results.mkdir(parents=True, exist_ok=True)
     mode = '_aggregated' if config.run.hot_mode == 'aggregated' else ''
-    stem = f'{config.run.traffic_model}_{config.run.start.year}_hbefa{config.run.hbefa_version}_batch{run.version}{mode}'
+    stem = f'{config.run.traffic_model}_{run.dates[0].year}_hbefa{config.run.hbefa_version}_batch{run.version}{mode}'
     name = f'hot_{stem}.parquet'
     results.to_parquet(config.paths.results / name)
     profile.to_parquet(config.paths.results / f'hot_profile_{stem}.parquet')

@@ -20,7 +20,7 @@ from drive.config import load_config
 from drive.io import hbefa
 
 V1_HOT_PATTERN = 'T+25°C,tØ,dØ'
-TOLERANCE = dict(rtol=0.0, atol=0.0, equal_nan=True)
+TOLERANCE = {'rtol': 0.0, 'atol': 0.0, 'equal_nan': True}
 RAW_VALUES = {'Weight': 'weight', 'EFA': 'efa', 'EFA_0%': 'efa_0', 'EFA_100%': 'efa_100', 'v': 'speed', 'v_0%': 'speed_0',
               'v_100%': 'speed_100', 'Cum. mileage': 'cum_mileage'}
 

@@ -68,7 +68,8 @@ def share_corrections(links: pd.DataFrame,
     Returns:
         pd.DataFrame: hgv_corr and lcv_corr, index as `links`
     """
-    days = day_types.index[(day_types.index.year == reference_year) & (day_types == reference_day_type)]
+    dates = pd.DatetimeIndex(day_types.index)
+    days = dates[(dates.year == reference_year) & (day_types == reference_day_type).to_numpy()]
     shares = vehicle_shares[vehicle_shares.index.get_level_values('date').isin(days)]
     mean_shares = shares.groupby(level=['vehicle_class', 'scaling_road_type']).mean()
     road_types = links['scaling_road_type']

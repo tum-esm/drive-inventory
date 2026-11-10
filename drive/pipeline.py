@@ -11,8 +11,16 @@ from drive.config import DriveConfig
 from drive.domain.activity import Activity
 from drive.domain.calendar import DAY_GROUPS, OUTLIER_GROUPS, calendar_day_types, combined_day_types
 from drive.domain.counts_qa import QAParams, QAReport, link_attributes, link_volumes, qa_link_counts
-from drive.domain.kernel import (EfTable, HotEmissions, KernelParams, build_aggregated_ef_table, build_ef_table,
-                                 hot_emissions, profile_frame, share_corrections)
+from drive.domain.kernel import (
+    EfTable,
+    HotEmissions,
+    KernelParams,
+    build_aggregated_ef_table,
+    build_ef_table,
+    hot_emissions,
+    profile_frame,
+    share_corrections,
+)
 from drive.io.calendar_excel import read_calendar
 
 
@@ -78,7 +86,8 @@ def load_day_types(config: DriveConfig, version: int | None = None) -> pd.Series
 
 def _day_groups(config: DriveConfig) -> dict[int, int] | None:
     """Groups of the day types; v1's day types are their own groups."""
-    return DAY_GROUPS if config.run.calendar_source == 'store' else None
+    run, _ = _require(config)
+    return DAY_GROUPS if run.calendar_source == 'store' else None
 
 
 def load_link_counts(config: DriveConfig) -> tuple[pd.DataFrame, QAReport, int]:
@@ -96,7 +105,7 @@ def load_link_counts(config: DriveConfig) -> tuple[pd.DataFrame, QAReport, int]:
 
     params = QAParams(reference_year=run.reference_year,
                       reference_day_type=run.reference_day_type,
-                      completeness_window=tuple(d.isoformat() for d in qa.completeness_window),
+                      completeness_window=(qa.completeness_window[0].isoformat(), qa.completeness_window[1].isoformat()),
                       hourly_daily_tolerance=qa.hourly_daily_tolerance,
                       min_daily_value=qa.min_daily_value,
                       outlier_z_threshold=qa.outlier_z_threshold,
@@ -140,6 +149,8 @@ class HotRun:
 
 def clip_links(links: gpd.GeoDataFrame, boundary_path) -> gpd.GeoDataFrame:
     """Clips links to a boundary, as v1 does. A link split by the boundary gives one row per `piece`."""
+    if links.crs is None:
+        raise ValueError('The links have no CRS, so they cannot be clipped')
     boundary = gpd.read_file(boundary_path).to_crs(links.crs)
     clipped = gpd.clip(links, boundary).explode(index_parts=True)
     clipped['piece'] = clipped.index.get_level_values(1)

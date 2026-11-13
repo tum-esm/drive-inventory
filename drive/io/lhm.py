@@ -73,8 +73,8 @@ def read_export(path: str | Path) -> tuple[pd.DataFrame, LhmReport]:
     speed = speed.groupby(key, as_index=False)[HOURS].mean().assign(metric='speed', daily_value=np.nan)
 
     counts = pd.concat([volume, speed], ignore_index=True)
-    counts = counts.assign(source=SOURCE, detector_type=None)
-    columns = ['source', 'detector_id', 'detector_type', 'date', 'vehicle_class', 'metric', 'daily_value'] + HOURS
+    counts = counts.assign(source=SOURCE, detector_type=None, flags=None)
+    columns = ['source', 'detector_id', 'detector_type', 'date', 'vehicle_class', 'metric', 'daily_value'] + HOURS + ['flags']
     return RAW_COUNTS.validate(counts[columns]), report
 
 

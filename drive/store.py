@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS counts (
     daily_value   DOUBLE,
     {', '.join(f'{h} DOUBLE' for h in HOURS)}
 );
+ALTER TABLE counts ADD COLUMN IF NOT EXISTS flags VARCHAR;
 CREATE TABLE IF NOT EXISTS counter_links (
     batch_id      BIGINT NOT NULL,
     source        VARCHAR NOT NULL,

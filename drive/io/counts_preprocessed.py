@@ -59,6 +59,7 @@ def read_preprocessed_counts(path: str | Path,
         'metric': df['metric'],
         'daily_value': daily,
         **dict(zip(HOURS, (hours[h] for h in _SOURCE_HOURS))),
+        'flags': None,
     })
     counts = RAW_COUNTS.validate(counts)
 

@@ -26,6 +26,9 @@ RAW_COUNTS = pa.DataFrameSchema(
         'metric': pa.Column(str, pa.Check.isin(['volume', 'speed'])),
         'daily_value': pa.Column(float, _non_negative, nullable=True),
         **{h: pa.Column(float, _non_negative, nullable=True) for h in HOURS},
+        # quality flag per hour as delivered (BASt: - correct, u irregular, a missing, d faulty, s estimated for
+        # missing, k estimated for faulty, z DST change, x class not counted); empty if the source has none
+        'flags': pa.Column(str, pa.Check.str_matches(r'^[-uadskzx]{24}$'), nullable=True),
     },
     checks=pa.Check(lambda df: (df['vehicle_class'] != 'VKFZ') | (df['metric'] == 'speed'),
                     error='VKFZ is only valid with metric speed'),

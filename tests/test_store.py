@@ -10,7 +10,8 @@ def counts(values: dict[str, float]) -> pd.DataFrame:
     """One day of SUM volumes, detector id -> daily value."""
     return RAW_COUNTS.validate(pd.DataFrame([
         {'source': 'LHM', 'detector_id': detector, 'detector_type': None, 'date': pd.Timestamp('2025-03-04'),
-         'vehicle_class': 'SUM', 'metric': 'volume', 'daily_value': value, **{h: value / 24 for h in HOURS}}
+         'vehicle_class': 'SUM', 'metric': 'volume', 'daily_value': value, **{h: value / 24 for h in HOURS},
+         'flags': None}
         for detector, value in values.items()]))
 
 

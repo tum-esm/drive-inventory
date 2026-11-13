@@ -145,6 +145,8 @@ cold_start:
   vehicle_classes: [PC, LCV]
   road_types: [Access-residential, Local/Collector, Distributor/Secondary]
   buffer_m: 1500
+  components: [CO, NOx, NO2, CH4, CO2(rep), CO2(total), PM10-ex, BC-ex]
+  profile_road_type: Distributor/Secondary
 
 # Counts quality control (v1 data_preprocessing/31 settings)
 counts_qa:

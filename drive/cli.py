@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import sys
+import time
 from importlib.metadata import version
 
 import pandas as pd
@@ -15,7 +16,7 @@ from drive.io import dwd, hbefa, hbefa_api
 from drive.io.calendar_holidays import read_holidays, read_overrides
 from drive.io.counts_preprocessed import read_preprocessed_counts
 from drive.io.visum import read_links, read_zones
-from drive.pipeline import compute_hot_emissions, hot_profile, hot_results
+from drive.pipeline import cold_results, compute_cold_emissions, compute_hot_emissions, hot_profile, hot_results
 from drive.schemas import TEMPERATURE_KEY
 
 
@@ -190,6 +191,20 @@ def _run(args: argparse.Namespace) -> int:
     timing = ', '.join(f'{stage} {value:.1f} s' for stage, value in run.seconds.items())
     print(f'{config.paths.results / name}: {len(results)} rows, store batch {run.version}')
     print(f'Time: {timing}; links with negative volumes: {run.hot.negative_volume_links}')
+
+    if config.cold_start is not None:
+        start = time.perf_counter()
+        cold = compute_cold_emissions(config, run.activity, run.version)
+        cold_stem = f'{config.run.traffic_model}_{run.dates[0].year}_hbefa{config.run.hbefa_version}_batch{cold.version}'
+        name = f'cold_{cold_stem}.parquet'
+        cold_results(cold).to_parquet(config.paths.results / name)
+        cold.hourly.to_parquet(config.paths.results / f'cold_profile_{cold_stem}.parquet')
+        scaling_factors(cold.hourly.rename(columns={'emission_g': 'emission'})) \
+            .to_csv(config.paths.results / f'cold_timeprofile_{cold_stem}.csv', index=False)
+        starts = ', '.join(f'{vc} {value:.0f}' for vc, value in cold.daily_starts.items())
+        print(f'{config.paths.results / name}: {len(cold.links)} rows, {time.perf_counter() - start:.1f} s; '
+              f'daily starts within the boundary {starts}; temperature hours from the backup station '
+              f'{cold.temperature.from_backup}, interpolated {cold.temperature.interpolated}')
     return 0
 
 
@@ -219,7 +234,7 @@ def main(argv: list[str] | None = None) -> int:
     meteo.add_argument('config', help='path to the run configuration (YAML)')
     meteo.set_defaults(func=_ingest_meteo)
 
-    compute = commands.add_parser('run', help='compute the annual hot emissions of a run')
+    compute = commands.add_parser('run', help='compute the hot and cold start emissions of a run')
     compute.add_argument('config', help='path to the run configuration (YAML)')
     compute.set_defaults(func=_run)
 

@@ -143,6 +143,8 @@ class ColdStartConfig(_Strict):
     vehicle_classes: list[str]  # classes with start factors and starts per zone
     road_types: list[str]  # links that receive starts; others are assumed to carry hot traffic only
     buffer_m: float  # starts of a zone go to the links within this distance
+    components: list[str]  # start tables have no non-exhaust part, and 2024/2025 lack PM2.5-ex
+    profile_road_type: str  # scaling road type whose hourly activity gives the starts per hour
 
 
 class KernelConfig(_Strict):

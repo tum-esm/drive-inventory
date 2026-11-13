@@ -10,7 +10,7 @@ from drive import store
 from drive.config import DriveConfig
 from drive.domain.activity import Activity
 from drive.domain.calendar import DAY_GROUPS, OUTLIER_GROUPS, calendar_day_types, combined_day_types
-from drive.domain.cold_start import StartsReport, distribute_starts
+from drive.domain.cold_start import StartsReport, distribute_starts, hourly_cold_emissions, link_cold_emissions
 from drive.domain.counts_qa import QAParams, QAReport, link_attributes, link_volumes, qa_link_counts
 from drive.domain.kernel import (
     EfTable,
@@ -190,6 +190,7 @@ class HotRun:
     version: int  # store batch id the data was read at
     report: QAReport
     seconds: dict[str, float]  # wall time per stage
+    activity: Activity
 
 
 def clip_links(links: gpd.GeoDataFrame, boundary_path) -> gpd.GeoDataFrame:
@@ -234,7 +235,7 @@ def compute_hot_emissions(config: DriveConfig) -> HotRun:
     hot = hot_emissions(links, corrections, activity, dates, ef, params,
                         profile_weights={'length_km': links.length.to_numpy() / 1000})
     seconds['kernel'] = time.perf_counter() - start
-    return HotRun(links, corrections, hot, ef, dates, version, report, seconds)
+    return HotRun(links, corrections, hot, ef, dates, version, report, seconds, activity)
 
 
 def hot_profile(run: HotRun, config: DriveConfig) -> pd.DataFrame:
@@ -248,3 +249,70 @@ def hot_results(run: HotRun) -> pd.DataFrame:
     keys = run.links[['road_link_id', 'from_node', 'piece', 'road_type', 'scaling_road_type']].copy()
     keys['length_km'] = run.links.length / 1000
     return pd.concat([keys, run.hot.emissions], axis=1)
+
+
+@dataclass
+class ColdRun:
+    links: gpd.GeoDataFrame  # the links of the run after clipping, with road_link_id, from_node, piece
+    emissions: pd.DataFrame  # g per link piece and period, columns {vehicle_class}_{component}
+    hourly: pd.DataFrame  # time, vehicle_class, component, emission_g
+    daily_starts: dict[str, float]  # starts per normal weekday within the clip boundary
+    starts: StartsReport
+    temperature: TemperatureReport
+    version: int
+
+
+def compute_cold_emissions(config: DriveConfig, activity: Activity | None = None,
+                           version: int | None = None) -> ColdRun:
+    """Cold start excess emissions of the run (v1 notebook 11).
+
+    Starts per link and day come from the traffic model's zones (domain.cold_start). Within the clip
+    boundary they are counted by clipped length. Each hour's starts are the daily starts times the
+    hourly activity of `cold_start.profile_road_type`, which as in v1 includes the vehicle share of the
+    class. Factors follow the hour's temperature. The period's totals are distributed to the clipped
+    link pieces by the starts of their whole link, as in v1 (backlog R39).
+
+    Args:
+        activity, version: from a hot run of the same config, to avoid computing them twice
+    """
+    run, _ = _require(config)
+    c = config.cold_start
+    if c is None or run.start is None or run.end is None or run.hbefa_version is None:
+        raise ValueError('The config needs the cold_start section, run.start, run.end and run.hbefa_version')
+    if activity is None or version is None:
+        activity, _, version = load_activity(config)
+
+    links, starts_report = load_link_starts(config, version)
+    columns = [f'{vc}_starts' for vc in c.vehicle_classes]
+    per_metre = links[columns].div(links.length, axis=0).add_suffix('_per_m')
+    links = pd.concat([links, per_metre], axis=1)
+    if config.paths.clip_boundary is not None:
+        links = clip_links(links, config.paths.clip_boundary)
+    else:
+        links = links.assign(piece=0)
+    daily_starts = {vc: float((links[f'{vc}_starts_per_m'] * links.length).sum()) for vc in c.vehicle_classes}
+
+    days = pd.date_range(run.start, run.end)
+    hours = pd.date_range(days[0], periods=len(days) * 24, freq='1h')
+    missing = activity.missing_days[c.profile_road_type].intersection(days)
+    if len(missing) > 0:
+        raise ValueError(f'No hourly activity of {c.profile_road_type} on {len(missing)} days, e.g. {list(missing[:3])}')
+    profile = activity.timeprofile[c.profile_road_type].reindex(hours)
+    hourly_starts = pd.DataFrame({vc: daily_starts[vc] * profile[vc] for vc in c.vehicle_classes}, index=hours)
+
+    temperature, temperature_report = load_temperature(config, hours, version)
+    factors = store.read_emission_factors(config.paths.store, run.hbefa_version, run.start.year, 'start',
+                                          'aggregate_ts', c.components, version)
+    hourly = hourly_cold_emissions(temperature, hourly_starts, factors, c.components)
+    totals = hourly.groupby(['vehicle_class', 'component'], sort=False)['emission_g'].sum()
+
+    weights = links[columns].set_axis(c.vehicle_classes, axis=1)
+    emissions = link_cold_emissions(weights, totals)
+    return ColdRun(links, emissions, hourly, daily_starts, starts_report, temperature_report, version)
+
+
+def cold_results(run: ColdRun) -> pd.DataFrame:
+    """Result table: g/km per link and piece, like hot_results."""
+    keys = run.links[['road_link_id', 'from_node', 'piece', 'road_type', 'scaling_road_type']].copy()
+    keys['length_km'] = run.links.length / 1000
+    return pd.concat([keys, run.emissions.div(keys['length_km'], axis=0)], axis=1)

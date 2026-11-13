@@ -63,3 +63,74 @@ def distribute_starts(links: gpd.GeoDataFrame,
                           empty.tolist(),
                           lost_starts={c: float(zones[f'{c}_starts'].iloc[empty].sum()) for c in vehicle_classes})
     return starts, report
+
+
+# HBEFA start factors exist for these ambient temperatures (°C); trip duration and length are averages
+TEMPERATURE_BINS = np.array([-10, -5, 0, 5, 10, 15, 20, 25])
+
+
+def start_patterns(temperature: np.ndarray) -> np.ndarray:
+    """HBEFA ambient pattern of each temperature: the nearest bin, ties to the lower bin (v1).
+
+    Raises:
+        ValueError: on NaN or infinite temperatures, which v1 once turned into -10 °C silently
+    """
+    temperature = np.asarray(temperature, dtype=float)
+    if not np.isfinite(temperature).all():
+        raise ValueError(f'{(~np.isfinite(temperature)).sum()} invalid temperatures')
+    nearest = TEMPERATURE_BINS[np.abs(temperature[:, None] - TEMPERATURE_BINS[None, :]).argmin(axis=1)]
+    return np.array([f'T{b:+d}°C,tØ,dØ' for b in nearest])
+
+
+def hourly_cold_emissions(temperature: pd.Series,
+                          hourly_starts: pd.DataFrame,
+                          factors: pd.DataFrame,
+                          components: list[str]) -> pd.DataFrame:
+    """Cold start excess emissions per hour, vehicle class and component (g).
+
+    Args:
+        temperature: ambient temperature per hour (°C)
+        hourly_starts: starts per hour (same index), one column per vehicle class
+        factors: EMISSION_FACTORS rows of a start table (g/start)
+
+    Returns:
+        long table: time, vehicle_class, component, emission_g
+
+    Raises:
+        ValueError: if the indexes differ or a factor is missing
+    """
+    if not temperature.index.equals(hourly_starts.index):
+        raise ValueError('temperature and hourly_starts need the same index')
+    patterns = start_patterns(temperature.to_numpy())
+    frames = []
+    for vc in hourly_starts.columns:
+        table = factors[factors['vehicle_class'] == vc].pivot(index='ambient_pattern', columns='pollutant', values='efa')
+        table = table.reindex(index=np.unique(patterns), columns=components)
+        if table.isna().any().any():
+            isna = table.isna().to_numpy()
+            missing = [(p, c) for i, p in enumerate(table.index) for j, c in enumerate(table.columns) if isna[i, j]]
+            raise ValueError(f'No {vc} start factors for {missing[:5]}')
+        ef = table.loc[patterns].to_numpy()  # hour x component, g/start
+        emission = ef * hourly_starts[vc].to_numpy()[:, None]
+        frames.append(pd.DataFrame({
+            'time': np.repeat(temperature.index.to_numpy(), len(components)),
+            'vehicle_class': vc,
+            'component': np.tile(components, len(temperature)),
+            'emission_g': emission.ravel(),
+        }))
+    return pd.concat(frames, ignore_index=True)
+
+
+def link_cold_emissions(weights: pd.DataFrame, totals: pd.Series) -> pd.DataFrame:
+    """Distributes the period's totals to links in proportion to their starts.
+
+    Args:
+        weights: starts per link, one column per vehicle class
+        totals: g per (vehicle_class, component)
+
+    Returns:
+        g per link, columns `{vehicle_class}_{component}`
+    """
+    share = weights / weights.sum()
+    columns = {f'{vc}_{c}': share[vc] * totals[(vc, c)] for vc, c in totals.index}
+    return pd.DataFrame(columns, index=weights.index)

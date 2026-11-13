@@ -55,6 +55,17 @@ class HotEmissions:
     profiles: dict[str, np.ndarray]
 
 
+def reference_shares(vehicle_shares: pd.Series,
+                     day_types: pd.Series,
+                     reference_year: int,
+                     reference_day_type: int = 0) -> pd.Series:
+    """Mean counted share per (vehicle_class, scaling_road_type) over the reference days of the reference year."""
+    dates = pd.DatetimeIndex(day_types.index)
+    days = dates[(dates.year == reference_year) & (day_types == reference_day_type).to_numpy()]
+    shares = vehicle_shares[vehicle_shares.index.get_level_values('date').isin(days)]
+    return shares.groupby(level=['vehicle_class', 'scaling_road_type']).mean()
+
+
 def share_corrections(links: pd.DataFrame,
                       vehicle_shares: pd.Series,
                       day_types: pd.Series,
@@ -68,10 +79,7 @@ def share_corrections(links: pd.DataFrame,
     Returns:
         pd.DataFrame: hgv_corr and lcv_corr, index as `links`
     """
-    dates = pd.DatetimeIndex(day_types.index)
-    days = dates[(dates.year == reference_year) & (day_types == reference_day_type).to_numpy()]
-    shares = vehicle_shares[vehicle_shares.index.get_level_values('date').isin(days)]
-    mean_shares = shares.groupby(level=['vehicle_class', 'scaling_road_type']).mean()
+    mean_shares = reference_shares(vehicle_shares, day_types, reference_year, reference_day_type)
     road_types = links['scaling_road_type']
     return pd.DataFrame({
         'hgv_corr': links['dtv_HGV'] / links['dtv_SUM'] / road_types.map(mean_shares.loc['HGV']),

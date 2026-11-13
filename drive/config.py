@@ -145,6 +145,9 @@ class ColdStartConfig(_Strict):
     buffer_m: float  # starts of a zone go to the links within this distance
     components: list[str]  # start tables have no non-exhaust part, and 2024/2025 lack PM2.5-ex
     profile_road_type: str  # scaling road type whose hourly activity gives the starts per hour
+    # vehicle_specific: daily scaling x share / reference share x diurnal cycle of the class (R40), so a reference
+    # day gives about 1 per class, as for hot volumes; v1_share: v1's daily scaling x share x diurnal cycle
+    start_scaling: Literal['vehicle_specific', 'v1_share'] = 'vehicle_specific'
 
 
 class KernelConfig(_Strict):

@@ -147,6 +147,7 @@ cold_start:
   buffer_m: 1500
   components: [CO, NOx, NO2, CH4, CO2(rep), CO2(total), PM10-ex, BC-ex]
   profile_road_type: Distributor/Secondary
+  start_scaling: vehicle_specific   # v1_share reproduces v1 (spec R40)
 
 # Counts quality control (v1 data_preprocessing/31 settings)
 counts_qa:

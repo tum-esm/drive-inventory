@@ -20,6 +20,7 @@ from drive.domain.kernel import (
     build_ef_table,
     hot_emissions,
     profile_frame,
+    reference_shares,
     share_corrections,
 )
 from drive.domain.meteo import TemperatureReport, combine_stations, station_series, to_local_hourly
@@ -268,8 +269,9 @@ def compute_cold_emissions(config: DriveConfig, activity: Activity | None = None
 
     Starts per link and day come from the traffic model's zones (domain.cold_start). Within the clip
     boundary they are counted by clipped length. Each hour's starts are the daily starts times the
-    hourly activity of `cold_start.profile_road_type`, which as in v1 includes the vehicle share of the
-    class. Factors follow the hour's temperature. The period's totals are distributed to the clipped
+    hourly activity of the class on `cold_start.profile_road_type`: daily scaling x share x diurnal cycle
+    of the class, divided by the class's share on the reference days (`start_scaling: vehicle_specific`,
+    R40) or, as in v1, not (`v1_share`). Factors follow the hour's temperature. The period's totals are distributed to the clipped
     link pieces by the starts of their whole link, as in v1 (backlog R39).
 
     Args:
@@ -298,6 +300,10 @@ def compute_cold_emissions(config: DriveConfig, activity: Activity | None = None
     if len(missing) > 0:
         raise ValueError(f'No hourly activity of {c.profile_road_type} on {len(missing)} days, e.g. {list(missing[:3])}')
     profile = activity.timeprofile[c.profile_road_type].reindex(hours)
+    if c.start_scaling == 'vehicle_specific':
+        shares = reference_shares(activity.vehicle_shares, load_day_types(config, version), run.reference_year,
+                                  run.reference_day_type).xs(c.profile_road_type, level='scaling_road_type')
+        profile = profile[c.vehicle_classes] / shares[c.vehicle_classes]
     hourly_starts = pd.DataFrame({vc: daily_starts[vc] * profile[vc] for vc in c.vehicle_classes}, index=hours)
 
     temperature, temperature_report = load_temperature(config, hours, version)

@@ -100,10 +100,25 @@ class CalendarIngest(_Strict):
     overrides: Path | None = None  # corrections of the school holidays: csv with date, school_holiday, reason
 
 
+class MeteoIngest(_Strict):
+    """DWD hourly temperatures, see io.dwd. Each ingest adds only the hours that are new or changed."""
+    stations: list[str]  # DWD station ids, e.g. '03379'
+    years: tuple[int, int]  # first and last year (inclusive), padded by a day for the conversion to local time
+
+
 class IngestConfig(_Strict):
     counts: list[CountsSource] = []
     hbefa: HbefaIngest | None = None
     calendar: CalendarIngest | None = None
+    meteo: MeteoIngest | None = None
+
+
+class TemperatureConfig(_Strict):
+    """Ambient temperature of a run, see domain.meteo."""
+    station: str
+    backup_station: str | None = None  # fills hours missing at `station`
+    max_gap_hours: int = 6  # longest gap that is interpolated; a longer one raises
+    timezone: str = 'Europe/Berlin'  # local time of counts and profiles
 
 
 class RunConfig(_Strict):
@@ -120,6 +135,7 @@ class RunConfig(_Strict):
     hot_ambient_pattern: str | None = None  # the HBEFA pattern of the hot factors (R33: fixed for now)
     hot_mode: Literal['los_specific', 'aggregated'] = 'los_specific'  # traffic situation per link and hour, or one mean
     area_type: Literal['Urban', 'Motorway', 'Rural'] = 'Urban'
+    temperature: TemperatureConfig | None = None  # needed for cold starts
 
 
 class KernelConfig(_Strict):

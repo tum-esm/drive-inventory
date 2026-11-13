@@ -105,6 +105,10 @@ ingest:
     years: [2018, 2026]
     public_categories: [public, catholic]
     overrides: auxiliary/calendar_overrides_munich.csv
+  # DWD hourly temperature: 03379 München-Stadt, 01262 München-Flughafen (backup)
+  meteo:
+    stations: ['03379', '01262']
+    years: [2018, 2026]
 
 run:
   traffic_model: visum2025
@@ -119,6 +123,10 @@ run:
   hot_ambient_pattern: T+25°C,tØ,dØ    # v1 behaviour, R33 will select it by temperature
   area_type: Urban
   hot_mode: los_specific               # or aggregated: one mean factor (tables for 2024 and 2025 only)
+  temperature:                         # v1 notebook 11 settings
+    station: '03379'
+    backup_station: '01262'
+    max_gap_hours: 6
 
 # Hot emission kernel: limits of the volume/capacity ratio per LOS class (tuned by v1 notebook 01), HBS 2015 car units
 kernel:

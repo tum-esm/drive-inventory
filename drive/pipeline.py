@@ -21,6 +21,7 @@ from drive.domain.kernel import (
     profile_frame,
     share_corrections,
 )
+from drive.domain.meteo import TemperatureReport, combine_stations, station_series, to_local_hourly
 from drive.io.calendar_excel import read_calendar
 
 
@@ -82,6 +83,32 @@ def load_day_types(config: DriveConfig, version: int | None = None) -> pd.Series
         raise ValueError(f'The calendar covers {day_types.index.min().year} to {day_types.index.max().year}, '
                          f'the counts period and the run need {first} to {last}')
     return day_types
+
+
+def load_temperature(config: DriveConfig,
+                     index: pd.DatetimeIndex,
+                     version: int | None = None) -> tuple[pd.Series, TemperatureReport]:
+    """Hourly ambient temperature on a local, naive hourly index: main station, gaps from the backup
+    station, converted to local time (v1 notebook 11).
+
+    Args:
+        version: store batch id to read at, None = run.data_version
+    """
+    run, _ = _require(config)
+    t = run.temperature
+    if t is None:
+        raise ValueError('The config needs run.temperature')
+    at = run.data_version if version is None else version
+    # local hours lie within a day of UTC; the margin also covers the hours interpolation looks at
+    start = (index.min() - pd.Timedelta(days=1)).to_pydatetime()
+    end = (index.max() + pd.Timedelta(days=1)).to_pydatetime()
+
+    def read(station: str) -> pd.Series:
+        return station_series(store.read_temperatures(config.paths.store, station, start, end, at))
+
+    main, from_backup = combine_stations(read(t.station), read(t.backup_station) if t.backup_station else None)
+    temperature, interpolated = to_local_hourly(main, index, t.timezone, t.max_gap_hours)
+    return temperature, TemperatureReport(from_backup=from_backup, interpolated=interpolated)
 
 
 def _day_groups(config: DriveConfig) -> dict[int, int] | None:

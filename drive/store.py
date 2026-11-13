@@ -18,7 +18,7 @@ import geopandas as gpd
 import pandas as pd
 import shapely
 
-from drive.schemas import CALENDAR_KEY, COUNT_KEY, EF_KEY, HOURS
+from drive.schemas import CALENDAR_KEY, COUNT_KEY, EF_KEY, HOURS, TEMPERATURE_KEY
 
 DataVersion = int | datetime | None
 
@@ -122,6 +122,14 @@ CREATE TABLE IF NOT EXISTS calendar (
     school_holiday VARCHAR,
     override       VARCHAR
 );
+CREATE TABLE IF NOT EXISTS temperatures (
+    batch_id        BIGINT NOT NULL,
+    station_id      VARCHAR NOT NULL,
+    timestamp_utc   TIMESTAMP NOT NULL,
+    air_temperature DOUBLE,
+    quality_level   BIGINT NOT NULL,
+    archive         VARCHAR NOT NULL
+);
 """
 
 # table -> key that identifies a row across batches (latest batch wins)
@@ -132,6 +140,7 @@ _KEYS = {
     'links': ['traffic_model', 'road_link_id', 'from_node'],
     'zones': ['traffic_model', 'zone_id'],
     'calendar': CALENDAR_KEY,
+    'temperatures': TEMPERATURE_KEY,
 }
 
 
@@ -366,6 +375,35 @@ def read_calendar(store: Path, region: str, data_version: DataVersion = None) ->
             raise ValueError(missing) from error
     if df.empty:
         raise ValueError(missing)
+    return df
+
+
+def read_temperatures(store: Path,
+                      station_id: str,
+                      start: datetime | None = None,
+                      end: datetime | None = None,
+                      data_version: DataVersion = None) -> pd.DataFrame:
+    """Hourly temperatures of one station (contract drive.schemas.TEMPERATURES plus batch_id), latest batch
+    per hour. Ingests are incremental, so each batch holds only the hours that were new or changed.
+
+    Args:
+        start, end: only hours in [start, end) UTC (naive)
+
+    Raises:
+        ValueError: if the station is not in the store
+    """
+    where, params = 'AND station_id = ?', list[object]([station_id])
+    for clause, value in [('timestamp_utc >= ?', start), ('timestamp_utc < ?', end)]:
+        if value is not None:
+            where += f' AND {clause}'
+            params.append(value)
+    try:
+        df = _read_latest(store, 'temperatures', resolve_version(store, data_version), where, params)
+    except duckdb.CatalogException as error:
+        raise ValueError(f'No temperatures in {store}, run `drive ingest meteo` first') from error
+    if df.empty:
+        raise ValueError(f'No temperatures of station {station_id} in {store} for {start} to {end}')
+    df['timestamp_utc'] = df['timestamp_utc'].astype('datetime64[us]')
     return df
 
 

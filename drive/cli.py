@@ -5,15 +5,18 @@ import hashlib
 import sys
 from importlib.metadata import version
 
+import pandas as pd
+
 from drive import __version__, store
 from drive.config import DriveConfig, load_config
 from drive.domain.calendar import build_calendar
 from drive.domain.kernel import scaling_factors
-from drive.io import hbefa, hbefa_api
+from drive.io import dwd, hbefa, hbefa_api
 from drive.io.calendar_holidays import read_holidays, read_overrides
 from drive.io.counts_preprocessed import read_preprocessed_counts
 from drive.io.visum import read_links, read_zones
 from drive.pipeline import compute_hot_emissions, hot_profile, hot_results
+from drive.schemas import TEMPERATURE_KEY
 
 
 def _read_model_links(config: DriveConfig, model: str):
@@ -130,6 +133,45 @@ def _ingest_calendar(args: argparse.Namespace) -> int:
     return 0
 
 
+def _ingest_meteo(args: argparse.Namespace) -> int:
+    config = load_config(args.config)
+    m = config.ingest.meteo
+    if m is None:
+        raise ValueError('No ingest.meteo section in the config')
+    print(f'Store: {config.paths.store}')
+    start = pd.Timestamp(m.years[0], 1, 1) - pd.Timedelta(days=1)
+    end = pd.Timestamp(m.years[1] + 1, 1, 1) + pd.Timedelta(days=1)
+    for station in m.stations:
+        rows, urls = dwd.fetch_temperatures(station, start, end)
+        # incremental: only hours that are new or differ from the store (e.g. a 'recent' value replaced by
+        # the quality-controlled 'historical' one) form the batch
+        try:
+            stored = store.read_temperatures(config.paths.store, station, start.to_pydatetime(),
+                                             end.to_pydatetime()).drop(columns='batch_id')
+        except (ValueError, FileNotFoundError):
+            stored = rows.iloc[:0]
+        merged = rows.merge(stored, on=TEMPERATURE_KEY, how='left', suffixes=('', '_stored'), indicator=True)
+        same = (merged['_merge'] == 'both') \
+            & ((merged['air_temperature'] == merged['air_temperature_stored'])
+               | (merged['air_temperature'].isna() & merged['air_temperature_stored'].isna())) \
+            & (merged['quality_level'] == merged['quality_level_stored']) \
+            & (merged['archive'] == merged['archive_stored'])
+        new = rows[~same.to_numpy()].reset_index(drop=True)
+        dropped = len(set(stored['timestamp_utc']) - set(rows['timestamp_utc']))
+        if new.empty:
+            print(f'{station}: {len(rows)} hours, all already in the store, skipped')
+            continue
+        sha = hashlib.sha256(new.to_csv(index=False).encode()).hexdigest()
+        batch = store.write_batch(config.paths.store, 'temperatures', 'DWD', ' '.join(urls), sha,
+                                  {'station_id': station}, {'temperatures': new})
+        counts = new['archive'].value_counts().to_dict()
+        print(f'{station} -> batch {batch}: {len(new)} new or changed hours of {len(rows)} '
+              f'({new["timestamp_utc"].min()} to {new["timestamp_utc"].max()} UTC, {counts}), '
+              f'{new["air_temperature"].isna().sum()} without a value'
+              + (f'; {dropped} stored hours no longer delivered, kept' if dropped else ''))
+    return 0
+
+
 def _run(args: argparse.Namespace) -> int:
     config = load_config(args.config)
     if config.run is None:
@@ -172,6 +214,10 @@ def main(argv: list[str] | None = None) -> int:
     cal = sources.add_parser('calendar', help='day types from the holidays package and the override file')
     cal.add_argument('config', help='path to the run configuration (YAML)')
     cal.set_defaults(func=_ingest_calendar)
+
+    meteo = sources.add_parser('meteo', help='DWD hourly temperatures of the stations under ingest.meteo')
+    meteo.add_argument('config', help='path to the run configuration (YAML)')
+    meteo.set_defaults(func=_ingest_meteo)
 
     compute = commands.add_parser('run', help='compute the annual hot emissions of a run')
     compute.add_argument('config', help='path to the run configuration (YAML)')

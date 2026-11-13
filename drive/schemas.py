@@ -197,3 +197,22 @@ CALENDAR = pa.DataFrameSchema(
     ordered=True,
     coerce=True,
 )
+
+TEMPERATURE_KEY = ['station_id', 'timestamp_utc']
+
+# Hourly 2 m air temperature per DWD station, as delivered: UTC (naive), °C, NaN where DWD reports -999.
+# quality_level: DWD QN_9; archive: 'historical' (quality controlled, final) or 'recent' (provisional)
+TEMPERATURES = pa.DataFrameSchema(
+    {
+        'station_id': pa.Column(str, pa.Check.str_matches(r'^\d{5}$')),
+        'timestamp_utc': pa.Column('datetime64[us]',
+                                   pa.Check(lambda s: s == s.dt.floor('h'), error='timestamp must be a full hour')),
+        'air_temperature': pa.Column(float, pa.Check.in_range(-60, 60), nullable=True),
+        'quality_level': pa.Column('int64'),
+        'archive': pa.Column(str, pa.Check.isin(['historical', 'recent'])),
+    },
+    unique=TEMPERATURE_KEY,
+    strict=True,
+    ordered=True,
+    coerce=True,
+)

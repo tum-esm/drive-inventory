@@ -138,6 +138,13 @@ class RunConfig(_Strict):
     temperature: TemperatureConfig | None = None  # needed for cold starts
 
 
+class ColdStartConfig(_Strict):
+    """Settings of domain.cold_start (values from v1 notebook 11)."""
+    vehicle_classes: list[str]  # classes with start factors and starts per zone
+    road_types: list[str]  # links that receive starts; others are assumed to carry hot traffic only
+    buffer_m: float  # starts of a zone go to the links within this distance
+
+
 class KernelConfig(_Strict):
     """Settings of domain.kernel (values from v1 hbefa_hot_emissions)."""
     vcr_thresholds: dict[str, tuple[float, float, float, float]]  # road type -> LOS limits of the VCR
@@ -166,6 +173,7 @@ class DriveConfig(_Strict):
     run: RunConfig | None = None
     counts_qa: CountsQAConfig | None = None
     kernel: KernelConfig | None = None
+    cold_start: ColdStartConfig | None = None
     scaling_road_types: dict[str, str] = {}  # road type -> scaling road type, unlisted types map to themselves
 
     @model_validator(mode='after')

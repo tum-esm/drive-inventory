@@ -10,6 +10,7 @@ from drive import store
 from drive.config import DriveConfig
 from drive.domain.activity import Activity
 from drive.domain.calendar import DAY_GROUPS, OUTLIER_GROUPS, calendar_day_types, combined_day_types
+from drive.domain.cold_start import StartsReport, distribute_starts
 from drive.domain.counts_qa import QAParams, QAReport, link_attributes, link_volumes, qa_link_counts
 from drive.domain.kernel import (
     EfTable,
@@ -160,6 +161,23 @@ def load_activity(config: DriveConfig) -> tuple[Activity, QAReport, int]:
     activity = Activity(link_counts, load_day_types(config, version), run.reference_year, run.reference_day_type,
                         _day_groups(config))
     return activity, report, version
+
+
+def load_link_starts(config: DriveConfig, version: int | None = None) -> tuple[gpd.GeoDataFrame, StartsReport]:
+    """Links of the run's traffic model (not clipped) with their daily starts per vehicle class.
+
+    Args:
+        version: store batch id to read at, None = run.data_version
+    """
+    run, _ = _require(config)
+    c = config.cold_start
+    if c is None:
+        raise ValueError('The config needs the cold_start section')
+    at = run.data_version if version is None else version
+    links = store.read_links(config.paths.store, run.traffic_model, at)
+    zones = store.read_zones(config.paths.store, run.traffic_model, at)
+    starts, report = distribute_starts(links, zones, c.vehicle_classes, c.road_types, c.buffer_m)
+    return gpd.GeoDataFrame(pd.concat([links, starts], axis=1), geometry='geometry', crs=links.crs), report
 
 
 @dataclass

@@ -140,6 +140,12 @@ kernel:
     Access-residential: [0.14, 0.25, 0.39, 0.52]
   car_unit_factors: {PC: 1, LCV: 1, MOT: 1, BUS: 1.75, HGV: 2.5}
 
+# Cold start excess emissions (v1 notebook 11)
+cold_start:
+  vehicle_classes: [PC, LCV]
+  road_types: [Access-residential, Local/Collector, Distributor/Secondary]
+  buffer_m: 1500
+
 # Counts quality control (v1 data_preprocessing/31 settings)
 counts_qa:
   period_start: 2019-01-01   # outliers are detected over the whole period, so it affects every year (Q22)

@@ -63,6 +63,18 @@ class LhmIngest(_Strict):
     locations: Path  # matched detectors (DETEKTOR_ID, road_link_id)
 
 
+class BastIngest(_Strict):
+    """BASt counting stations, see io.bast and docs/bast_counts_README.md."""
+    directory: Path  # downloads: annual/zst<station>_<year>.zip and raw/DZ_<year>[_<month>]_Rohdaten.zip
+    locations: Path  # matched detectors (MST_ID, DETEKTOR_ID, road_link_id); its stations are downloaded
+    years: tuple[int, int]  # first and last year (inclusive)
+    annual_url: str  # with {year} and {station}
+    page_url: str  # page that lists the raw-data archives
+    raw_from: int  # raw archives from this year on (all stations, unchecked), annual files before (checked, BASt has
+    # raw archives from 2021)
+    refresh_months: int = 3  # raw archives whose period ended less than this many months ago are downloaded again
+
+
 class HbefaTable(_Strict):
     """Tables to download, one per year."""
     category: Literal['hot', 'start']
@@ -123,6 +135,7 @@ class BoundariesIngest(_Strict):
 class IngestConfig(_Strict):
     counts: list[CountsSource] = []  # interim: v1's preprocessed files
     lhm: LhmIngest | None = None
+    bast: BastIngest | None = None
     hbefa: HbefaIngest | None = None
     calendar: CalendarIngest | None = None
     meteo: MeteoIngest | None = None
@@ -219,6 +232,9 @@ class DriveConfig(_Strict):
             m.zones = root / m.zones
         for c in self.ingest.counts:
             c.path = root / c.path
+        if self.ingest.bast is not None:
+            self.ingest.bast.directory = root / self.ingest.bast.directory
+            self.ingest.bast.locations = root / self.ingest.bast.locations
         if self.ingest.lhm is not None:
             self.ingest.lhm.directory = root / self.ingest.lhm.directory
             self.ingest.lhm.locations = root / self.ingest.lhm.locations

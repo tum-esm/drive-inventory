@@ -2,7 +2,7 @@
 
 DRIVE uses hourly counts from the automatic permanent counting stations (*Dauerzählstellen*) of the Federal Highway Research Institute (BASt) on motorways and federal roads around Munich. This page records where the data comes from, which formats it arrives in, and how DRIVE reads it. If BASt changes a URL, a file format or a code, compare the new state against what is written here.
 
-Status (13 November 2026): the reader for the hourly station table is done, `drive/io/bast.py` (step 2a). The reader for the raw files (2b) and the download command `drive ingest bast --download` for a monthly cron job (2c) are planned. Until 2c, the store holds v1's preprocessed BASt counts (batch 2).
+Status (13 November 2026): `drive ingest bast --download` downloads and ingests the BASt data (`drive/io/bast.py`) and is meant to run monthly as a cron job. By decision of the author, the counts come from the raw archives from 2021 on (`raw_from`) and from the annual station files for 2018–2020, the years without raw archives. Raw data covers all stations and keeps the original flags; BASt's annual files leave out stations that fail its checks and replace missing values by its own estimates. Small differences between the two are averaged out in the later stages.
 
 ## Sources
 
@@ -109,7 +109,13 @@ KFZ flags in the Munich files, both directions, 2018: `-` 365,379, `s` 72,396, `
 
 `drive/io/bast.py`:
 
-- `read_station_table(path)` reads an annual station file (`.csv` or the `.zip`) or one of v1's merged tables (comma-separated with an index column).
+- `read_station_table(path, stations)` reads an annual station file (`.csv` or the `.zip`) or one of v1's merged tables (comma-separated with an index column).
+- `read_raw_archive(path, stations)` reads a raw-data archive (`DZ_<year>[_<month>]_Rohdaten.zip`, also with nested zips) and keeps the stations given. Each station file is turned into rows of the station table, so both products go through the same conversion below:
+  - the lanes of a direction are added;
+  - `LmA` + `Sat` give `Lzg` (as in the annual table), `SV` gives `Lkw`;
+  - a class the file doesn't have is read as not counted (−1, flag `x`);
+  - records inserted at the clock change (status `i`, all values 0) are skipped as in v1, so that day has 23 hours;
+  - `detector_type` is the classification from the `S` line (`8+1`, `5+1`, `2`, `1`). The annual files don't state it, so it stays empty there.
 - `read_locations(path, model_link_ids)` reads the matching.
 
 | Step | Rule |
@@ -122,6 +128,29 @@ KFZ flags in the Munich files, both directions, 2018: `-` 365,379, `s` 72,396, `
 | Hours without a row | missing, flag `a`; v1 filled 0 (126 station-hours, all on 23-hour days) |
 | Flags | stored per hour in `counts.flags`, 24 characters. A class built from several columns gets the worst flag of its parts, in the order `- z u k s d a x` |
 | Checks | missing columns, a station-hour appearing twice, or an unknown flag raise an error |
+
+### Download and ingest (`drive ingest bast [--download]`)
+
+Settings in the config under `ingest.bast` (`directory`, `locations`, `years`, `annual_url`, `page_url`, `raw_from`, `refresh_months`). Downloads go to `<directory>/annual/zst<station>_<year>.zip` and `<directory>/raw/DZ_<year>[_<month>]_Rohdaten.zip`; the stations are those in the locations file.
+
+| Step | Rule |
+|---|---|
+| Annual files | Years before `raw_from` (2018–2020), every station: downloaded once if missing. A 404 means BASt has no file. A response that isn't a zip archive raises (v1's downloader saved 404 pages as `.zip`) |
+| Raw archives | Years from `raw_from` on: the yearly archive when BASt lists one, otherwise the monthly archives (the current year) |
+| Revisions | BASt changes raw data after publishing it. An archive whose period ended less than `refresh_months` (3) months ago is downloaded again each run; an unchanged file is not ingested again (same hash) |
+| Ingest order | Annual files (one batch per year), then raw archives; per year the monthly archives before the yearly one, so a yearly archive is the later batch and replaces the monthly data |
+| Split | `raw_from` is fixed in the config rather than taken from the links on the page, so a link that disappears can't switch a year to another product |
+| Matching | The locations file is one batch; it replaces the earlier matching of BASt as a whole |
+
+Downloads on 13 November 2026: annual files 2018–2024 (63 MB; files existed for 25, 25, 24, 29, 31, 32 and 34 of the 42 stations; 2021–2024 are no longer used), raw archives 2021–2025 (about 900 MB per year) and 2026-01 to 2026-08 (about 80 MB each). A run without new data takes about 20 s and downloads the most recent monthly archive again.
+
+Monthly cron job, e.g. on the 5th at 06:00:
+
+```text
+0 6 5 * * cd /path/to/drive-inventory && uv run drive ingest bast configs/munich_2025.yaml --download >> logs/bast_ingest.log 2>&1
+```
+
+The command ends with a non-zero exit code on any error (network, format, unknown flag), so the job can alert on it.
 
 What v1 ignored, recorded as R41 in the backlog (how the counts QA should use the flags is still open):
 
@@ -190,6 +219,33 @@ daily values: max |diff| 0.0; differ in 0 rows
 ```
 
 The 1,512 hourly values are the 126 station-hours without a row, times 2 directions and 6 classes.
+
+`uv run python scripts/compare_bast_sources.py` compares the ingested counts with v1's merged tables (values and flags), per year. Expected output (13 November 2026, store batch 82):
+
+```text
+v1 interim batch 2; new batches [62, ..., 82]; rows still read from the interim batch: 0
+ year product  only v1  only new   rows  rows equal  hours differ  flags differ  rows differ, flags equal
+ 2018  annual        0         0 109500      109500             0             0                         0
+ 2019  annual        0         0 109500      109500             0             0                         0
+ 2020  annual        0         0 105408      105408             0             0                         0
+ 2021     raw        0     21900 127020       86659        888250         45083                      5997
+ 2022     raw        0     48180 135780       96949        861001         42122                      8084
+ 2023     raw        0         0 183960      183960             0          2186                         0
+ 2024     raw        0         0 184464      184464             0          3166                         0
+ 2025     raw        0         0 183960      183960             0          3265                         0
+ 2026     raw        0    106848  15624       15097         11870           766                         0
+```
+
+- 2018–2020: v1 used the same annual files; identical.
+- 2021–2022: v1 used the annual files, the store has the raw data. The raw archives also contain stations BASt left out of the annual files ('only new': 5 stations in 2021, 11 in 2022).
+- 2023–2025: v1 used its own parse of the same raw archives; the values are identical. The flags differ where HGV now takes the worse flag of `LmA` and `Sat` (v1's parser kept the flag of `LmA`).
+- 2026: January was revised by BASt after v1 downloaded it. At 38 of 42 stations the month is identical; at 9986 the estimates (`s`) became missing values (`a`, 0), at 9140 some values changed, at 9106 and 9773 only flags. Every value difference comes with a changed flag. February to August are new.
+
+Effect on `drive run` 2025 against the run on v1's BASt counts (store batch 61 vs 82): hot CO2(rep) −0.13 % and NOx −0.10 % (HGV −0.74 %, BUS −0.50 %, LCV +0.28 %, PC −0.03 %); cold CO2(rep) +0.05 %. The 2025 counts are the same. The effect comes from 2021–2022, because the counts QA detects outliers per link and day type over 2019–2025 together.
+
+## Open points
+
+- How the counts QA uses the flags (R41).
 
 After a change, check:
 

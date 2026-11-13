@@ -3,14 +3,16 @@
 import argparse
 import hashlib
 import sys
+from datetime import date
 from importlib.metadata import version
 
+import geopandas as gpd
 import pandas as pd
 
 from drive import __version__, store
 from drive.config import DriveConfig, load_config
 from drive.domain.calendar import build_calendar
-from drive.io import boundaries, dwd, hbefa, hbefa_api, lhm
+from drive.io import bast, boundaries, dwd, hbefa, hbefa_api, lhm
 from drive.io.calendar_holidays import read_holidays, read_overrides
 from drive.io.counts_preprocessed import read_preprocessed_counts
 from drive.io.visum import read_links, read_zones
@@ -86,6 +88,91 @@ def _ingest_lhm(args: argparse.Namespace) -> int:
         return 0
     links, missing = lhm.read_locations(c.locations, model_link_ids)
     batch = store.write_batch(config.paths.store, 'counter_links', lhm.SOURCE, c.locations, sha, params,
+                              {'counter_links': links})
+    print(f'{c.locations.name} -> batch {batch}: {links["detector_id"].nunique()} detectors; matched links not in '
+          f'the model {missing}')
+    return 0
+
+
+def _bast_downloads(c, stations: list[str]) -> None:
+    """Annual files of the years before raw_from; raw archives from raw_from on (see io.bast)."""
+    today = date.today()
+    annual_dir, raw_dir = c.directory / 'annual', c.directory / 'raw'
+    for year in range(c.years[0], min(c.years[1], c.raw_from - 1, today.year - 1) + 1):
+        found = [s for s in stations if bast.download_annual(c.annual_url, s, year, annual_dir) is not None]
+        print(f'annual {year}: {len(found)} of {len(stations)} stations')
+
+    links = bast.raw_links(c.page_url)
+    yearly = {int(n[3:7]) for n in links if n.count('_') == 2}  # DZ_<year>_Rohdaten.zip
+    for name, url in sorted(links.items()):
+        parts = name.split('_')
+        year, month = int(parts[1]), (int(parts[2]) if len(parts) == 4 else None)
+        # the yearly archive replaces the monthly ones once BASt lists it
+        if not max(c.raw_from, c.years[0]) <= year <= c.years[1] or (month and year in yearly):
+            continue
+        end = date(year + 1, 1, 1) if month is None or month == 12 else date(year, month + 1, 1)
+        recent = (today.year - end.year) * 12 + today.month - end.month < c.refresh_months
+        target = raw_dir / name
+        if target.exists() and not recent:
+            continue
+        print(f'{"refreshing" if target.exists() else "downloading"} {name}', flush=True)
+        bast.download_raw(url, raw_dir)
+
+
+def _ingest_bast(args: argparse.Namespace) -> int:
+    config = load_config(args.config)
+    c = config.ingest.bast
+    if c is None:
+        raise ValueError('No ingest.bast section in the config')
+    print(f'Store: {config.paths.store}')
+    locations = gpd.read_file(c.locations, columns=['MST_ID'], ignore_geometry=True)
+    stations = sorted(locations['MST_ID'].astype(str).unique())
+    if args.download:
+        _bast_downloads(c, stations)
+
+    annual_dir = c.directory / 'annual'
+    years = sorted({int(p.stem.split('_')[1]) for p in annual_dir.glob('zst*_*.zip')})
+    for year in [y for y in years if c.years[0] <= y < c.raw_from]:
+        files = sorted(annual_dir.glob(f'zst*_{year}.zip'))
+        sha = hashlib.sha256(''.join(store.file_sha256(f) for f in files).encode()).hexdigest()
+        existing = store.find_batch(config.paths.store, 'counts', sha, {'product': 'annual'})
+        if existing is not None:
+            print(f'annual {year} already ingested as batch {existing}, skipped')
+            continue
+        counts = pd.concat([bast.read_station_table(f)[0] for f in files], ignore_index=True)
+        batch = store.write_batch(config.paths.store, 'counts', bast.SOURCE, annual_dir / f'zst*_{year}.zip', sha,
+                                  {'product': 'annual'}, {'counts': counts}, note='BASt annual station files')
+        flags = ''.join(counts.loc[counts['vehicle_class'] == 'SUM', 'flags'])
+        print(f'annual {year} -> batch {batch}: {len(files)} stations, {len(counts)} rows; KFZ hours by flag '
+              f'{pd.Series(list(flags)).value_counts().to_dict()}')
+
+    # monthly before yearly archives of a year, so that a yearly archive is the later batch and replaces them
+    def order(path):
+        parts = path.stem.split('_')
+        return int(parts[1]), len(parts) == 3, path.name
+    params = {'product': 'raw', 'stations': stations}
+    raw = [p for p in (c.directory / 'raw').glob('DZ_*_Rohdaten.zip') if int(p.stem.split('_')[1]) >= c.raw_from]
+    for file in sorted(raw, key=order):
+        sha = store.file_sha256(file)
+        existing = store.find_batch(config.paths.store, 'counts', sha, params)
+        if existing is not None:
+            print(f'{file.name} already ingested as batch {existing}, skipped')
+            continue
+        counts, r = bast.read_raw_archive(file, set(stations))
+        batch = store.write_batch(config.paths.store, 'counts', bast.SOURCE, file, sha, params, {'counts': counts},
+                                  note='BASt raw data')
+        print(f'{file.name} -> batch {batch}: {len(counts)} rows, {r.stations} stations, {r.first_date} to '
+              f'{r.last_date}; KFZ flags {r.flags}')
+
+    model_link_ids = _model_link_ids(config)
+    params = {'traffic_models': sorted(model_link_ids)}
+    sha = store.file_sha256(c.locations)
+    existing = store.find_batch(config.paths.store, 'counter_links', sha, params)
+    if existing is not None:
+        print(f'{c.locations.name} already ingested as batch {existing}, skipped')
+        return 0
+    links, missing = bast.read_locations(c.locations, model_link_ids)
+    batch = store.write_batch(config.paths.store, 'counter_links', bast.SOURCE, c.locations, sha, params,
                               {'counter_links': links})
     print(f'{c.locations.name} -> batch {batch}: {links["detector_id"].nunique()} detectors; matched links not in '
           f'the model {missing}')
@@ -257,6 +344,11 @@ def main(argv: list[str] | None = None) -> int:
     lhm_parser = sources.add_parser('lhm', help='LHM detector exports and locations under ingest.lhm')
     lhm_parser.add_argument('config', help='path to the run configuration (YAML)')
     lhm_parser.set_defaults(func=_ingest_lhm)
+    bast_parser = sources.add_parser('bast', help='BASt station files and raw data under ingest.bast')
+    bast_parser.add_argument('config', help='path to the run configuration (YAML)')
+    bast_parser.add_argument('--download', action='store_true',
+                             help='first download missing annual files and new or recent raw archives')
+    bast_parser.set_defaults(func=_ingest_bast)
     ef = sources.add_parser('hbefa', help='emission factor tables in ingest.hbefa.directory')
     ef.add_argument('config', help='path to the run configuration (YAML)')
     ef.add_argument('--download', action='store_true', help='first download the tables under ingest.hbefa.api that are missing')

@@ -54,6 +54,17 @@ ingest:
   lhm:
     directory: restricted_input/counting_data/lhm
     locations: restricted_input/counting_data/lhm/mst_locations_selected.gpkg
+  # BASt permanent counting stations (docs/bast_counts_README.md). `drive ingest bast --download` fetches the annual
+  # station files before raw_from and the raw archives from raw_from on (yearly, or monthly for the current year);
+  # meant to run monthly.
+  bast:
+    directory: restricted_input/counting_data/bast/downloads
+    locations: restricted_input/counting_data/bast/bast_locations_selected.gpkg
+    years: [2018, 2026]
+    annual_url: https://www.bast.de/videos/{year}/zst{station}.zip
+    page_url: https://www.bast.de/DE/Publikationen/Daten/Verkehrstechnik/DZ.html
+    raw_from: 2021
+    refresh_months: 3
   # Emission factor tables named {year}_{category}_{aggregation}_v{version}.parquet
   hbefa:
     directory: restricted_input/hbefa

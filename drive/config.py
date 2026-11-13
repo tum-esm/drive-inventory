@@ -56,6 +56,13 @@ class CountsSource(_Strict):
     path: Path
 
 
+class LhmIngest(_Strict):
+    """LHM detector exports and matched locations, see io.lhm."""
+    directory: Path  # folder with the exports
+    pattern: str = '*_MST_Detektoren*.csv'
+    locations: Path  # matched detectors (DETEKTOR_ID, road_link_id)
+
+
 class HbefaTable(_Strict):
     """Tables to download, one per year."""
     category: Literal['hot', 'start']
@@ -114,7 +121,8 @@ class BoundariesIngest(_Strict):
 
 
 class IngestConfig(_Strict):
-    counts: list[CountsSource] = []
+    counts: list[CountsSource] = []  # interim: v1's preprocessed files
+    lhm: LhmIngest | None = None
     hbefa: HbefaIngest | None = None
     calendar: CalendarIngest | None = None
     meteo: MeteoIngest | None = None
@@ -211,6 +219,9 @@ class DriveConfig(_Strict):
             m.zones = root / m.zones
         for c in self.ingest.counts:
             c.path = root / c.path
+        if self.ingest.lhm is not None:
+            self.ingest.lhm.directory = root / self.ingest.lhm.directory
+            self.ingest.lhm.locations = root / self.ingest.lhm.locations
         if self.ingest.hbefa is not None:
             self.ingest.hbefa.directory = root / self.ingest.hbefa.directory
             api = self.ingest.hbefa.api

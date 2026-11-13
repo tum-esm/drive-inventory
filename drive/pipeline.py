@@ -129,7 +129,7 @@ def load_link_counts(config: DriveConfig) -> tuple[pd.DataFrame, QAReport, int]:
     """
     run, qa = _require(config)
     version = store.resolve_version(config.paths.store, run.data_version)
-    raw = store.read_counts(config.paths.store, version, metric='volume',
+    raw = store.read_counts(config.paths.store, version, metric='volume', linked_in=run.traffic_model,
                             start=qa.period_start.isoformat(), end=qa.period_end.isoformat())
     links = store.read_counter_links(config.paths.store, run.traffic_model, version)
     attributes = link_attributes(store.read_links(config.paths.store, run.traffic_model, version))

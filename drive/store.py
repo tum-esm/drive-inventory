@@ -275,29 +275,44 @@ def _read_latest(store: Path, table: str, version: int, where: str = '', params:
         return con.execute(query, [version] + (params or [])).df()
 
 
+_COUNTER_LINKS_SNAPSHOT = """
+    SELECT * FROM counter_links c WHERE traffic_model = ? AND batch_id = (
+        SELECT max(batch_id) FROM counter_links WHERE source = c.source AND traffic_model = c.traffic_model
+                                                AND batch_id <= ?)"""
+
+
 def read_counts(store: Path,
                 data_version: DataVersion = None,
                 metric: str | None = None,
                 start: str | None = None,
-                end: str | None = None) -> pd.DataFrame:
+                end: str | None = None,
+                linked_in: str | None = None) -> pd.DataFrame:
     """Raw counts per detector (contract drive.schemas.RAW_COUNTS plus batch_id), latest batch per key.
 
     Args:
         metric: only this metric ('volume' or 'speed')
         start, end: only dates in [start, end] (ISO dates, inclusive)
+        linked_in: only detectors with a link in this traffic model (read_counter_links)
     """
+    version = resolve_version(store, data_version)
     where, params = '', []
     for clause, value in [('metric = ?', metric), ('date >= ?', start), ('date <= ?', end)]:
         if value is not None:
             where += f' AND {clause}'
             params.append(value)
-    return _read_latest(store, 'counts', resolve_version(store, data_version), where, params)
+    if linked_in is not None:
+        where += f' AND (source, detector_id) IN (SELECT source, detector_id FROM ({_COUNTER_LINKS_SNAPSHOT}))'
+        params += [linked_in, version]
+    return _read_latest(store, 'counts', version, where, params)
 
 
 def read_counter_links(store: Path, traffic_model: str, data_version: DataVersion = None) -> pd.DataFrame:
-    """Detector -> road link mapping of one traffic model, latest batch per detector."""
-    return _read_latest(store, 'counter_links', resolve_version(store, data_version),
-                        'AND traffic_model = ?', [traffic_model])
+    """Detector -> road link mapping of one traffic model. A matching is a whole snapshot per source,
+    so the latest batch of each source replaces its earlier ones completely."""
+    version = resolve_version(store, data_version)
+    with _connect_read(store) as con:
+        return con.execute(f'{_COUNTER_LINKS_SNAPSHOT} ORDER BY source, detector_id',
+                           [traffic_model, version]).df()
 
 
 def read_emission_factors(store: Path,

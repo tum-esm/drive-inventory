@@ -10,7 +10,7 @@ import pandas as pd
 from drive import __version__, store
 from drive.config import DriveConfig, load_config
 from drive.domain.calendar import build_calendar
-from drive.io import boundaries, dwd, hbefa, hbefa_api
+from drive.io import boundaries, dwd, hbefa, hbefa_api, lhm
 from drive.io.calendar_holidays import read_holidays, read_overrides
 from drive.io.counts_preprocessed import read_preprocessed_counts
 from drive.io.visum import read_links, read_zones
@@ -48,6 +48,47 @@ def _ingest_counts(args: argparse.Namespace) -> int:
               f'missing-value markers set to NaN')
         for model, missing in report.links_missing_in_model.items():
             print(f'    {model}: {len(missing)} matched links not in the model {missing[:20]}')
+    return 0
+
+
+def _model_link_ids(config: DriveConfig) -> dict[str, set[int]]:
+    if not config.traffic_models:
+        raise ValueError('No traffic_models in the config, counter links need at least one')
+    return {m: set(_read_model_links(config, m)[0]['road_link_id']) for m in config.traffic_models}
+
+
+def _ingest_lhm(args: argparse.Namespace) -> int:
+    config = load_config(args.config)
+    c = config.ingest.lhm
+    if c is None:
+        raise ValueError('No ingest.lhm section in the config')
+    print(f'Store: {config.paths.store}')
+    files = sorted(c.directory.glob(c.pattern))
+    if not files:
+        raise ValueError(f'No {c.pattern} in {c.directory}')
+    for file in files:
+        sha = store.file_sha256(file)
+        existing = store.find_batch(config.paths.store, 'counts', sha, {})
+        if existing is not None:
+            print(f'{file.name} already ingested as batch {existing}, skipped')
+            continue
+        counts, r = lhm.read_export(file)
+        batch = store.write_batch(config.paths.store, 'counts', lhm.SOURCE, file, sha, {}, {'counts': counts})
+        print(f'{file.name} -> batch {batch}: {len(counts)} rows of {r.detectors} detectors, {r.first_date} to '
+              f'{r.last_date}' + (f'; negative values read as missing {r.negative_values}' if r.negative_values else ''))
+
+    model_link_ids = _model_link_ids(config)
+    params = {'traffic_models': sorted(model_link_ids)}
+    sha = store.file_sha256(c.locations)
+    existing = store.find_batch(config.paths.store, 'counter_links', sha, params)
+    if existing is not None:
+        print(f'{c.locations.name} already ingested as batch {existing}, skipped')
+        return 0
+    links, missing = lhm.read_locations(c.locations, model_link_ids)
+    batch = store.write_batch(config.paths.store, 'counter_links', lhm.SOURCE, c.locations, sha, params,
+                              {'counter_links': links})
+    print(f'{c.locations.name} -> batch {batch}: {links["detector_id"].nunique()} detectors; matched links not in '
+          f'the model {missing}')
     return 0
 
 
@@ -213,6 +254,9 @@ def main(argv: list[str] | None = None) -> int:
     counts = sources.add_parser('counts', help='traffic counts listed under ingest.counts')
     counts.add_argument('config', help='path to the run configuration (YAML)')
     counts.set_defaults(func=_ingest_counts)
+    lhm_parser = sources.add_parser('lhm', help='LHM detector exports and locations under ingest.lhm')
+    lhm_parser.add_argument('config', help='path to the run configuration (YAML)')
+    lhm_parser.set_defaults(func=_ingest_lhm)
     ef = sources.add_parser('hbefa', help='emission factor tables in ingest.hbefa.directory')
     ef.add_argument('config', help='path to the run configuration (YAML)')
     ef.add_argument('--download', action='store_true', help='first download the tables under ingest.hbefa.api that are missing')

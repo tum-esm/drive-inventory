@@ -1,4 +1,4 @@
-"""Hot emissions of the whole series 2018-2025 with `drive run`'s chain, one output set per year.
+"""Hot and cold start emissions of the whole series 2018-2025 with `drive run`'s chain, one output set per year.
 
 Usage: uv run python scripts/run_series.py [configs/munich_2025.yaml] [store|v1_workbook]
 
@@ -12,8 +12,7 @@ from datetime import date
 from pathlib import Path
 
 from drive.config import DriveConfig, load_config
-from drive.domain.kernel import scaling_factors
-from drive.pipeline import compute_hot_emissions, hot_profile, hot_results
+from drive.pipeline import run_inventory
 
 YEARS = range(2018, 2026)
 SERIES = {'visum2019': {'reference_year': 2019, 'period_start': date(2018, 1, 1)},
@@ -40,19 +39,10 @@ def main(config_path: str = 'configs/munich_2025.yaml', calendar_source: str = '
     base = load_config(config_path)
     for year in YEARS:
         config = series_config(base, year, calendar_source)
-        run = compute_hot_emissions(config)
-        profile = hot_profile(run, config)
-        results = config.paths.results
-        results.mkdir(parents=True, exist_ok=True)
-        stem = f'{config.run.traffic_model}_{year}_hbefa{config.run.hbefa_version}_batch{run.version}'
-        hot_results(run).to_parquet(results / f'hot_{stem}.parquet')
-        profile.to_parquet(results / f'hot_profile_{stem}.parquet')
-        scaling_factors(profile.rename(columns={'emission_g': 'emission'})) \
-            .to_csv(results / f'hot_timeprofile_{stem}.csv', index=False)
-        timing = ', '.join(f'{stage} {value:.1f} s' for stage, value in run.seconds.items())
-        print(f'{year} {config.run.traffic_model}: {len(run.links)} rows, batch {run.version}, '
-              f'negative volume links {run.hot.negative_volume_links}; {timing}', flush=True)
-    print(f'Results in {Path(results)}')
+        print(f'{year} {config.run.traffic_model}:', flush=True)
+        for line in run_inventory(config):
+            print(f'    {line}', flush=True)
+    print(f'Results in {Path(config.paths.results)}')
     return 0
 
 

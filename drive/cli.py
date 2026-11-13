@@ -3,7 +3,6 @@
 import argparse
 import hashlib
 import sys
-import time
 from importlib.metadata import version
 
 import pandas as pd
@@ -11,12 +10,11 @@ import pandas as pd
 from drive import __version__, store
 from drive.config import DriveConfig, load_config
 from drive.domain.calendar import build_calendar
-from drive.domain.kernel import scaling_factors
 from drive.io import dwd, hbefa, hbefa_api
 from drive.io.calendar_holidays import read_holidays, read_overrides
 from drive.io.counts_preprocessed import read_preprocessed_counts
 from drive.io.visum import read_links, read_zones
-from drive.pipeline import cold_results, compute_cold_emissions, compute_hot_emissions, hot_profile, hot_results
+from drive.pipeline import run_inventory
 from drive.schemas import TEMPERATURE_KEY
 
 
@@ -175,36 +173,8 @@ def _ingest_meteo(args: argparse.Namespace) -> int:
 
 def _run(args: argparse.Namespace) -> int:
     config = load_config(args.config)
-    if config.run is None:
-        raise ValueError('No run section in the config')
-    run = compute_hot_emissions(config)
-    results = hot_results(run)
-    profile = hot_profile(run, config)
-    config.paths.results.mkdir(parents=True, exist_ok=True)
-    mode = '_aggregated' if config.run.hot_mode == 'aggregated' else ''
-    stem = f'{config.run.traffic_model}_{run.dates[0].year}_hbefa{config.run.hbefa_version}_batch{run.version}{mode}'
-    name = f'hot_{stem}.parquet'
-    results.to_parquet(config.paths.results / name)
-    profile.to_parquet(config.paths.results / f'hot_profile_{stem}.parquet')
-    scaling_factors(profile.rename(columns={'emission_g': 'emission'})) \
-        .to_csv(config.paths.results / f'hot_timeprofile_{stem}.csv', index=False)
-    timing = ', '.join(f'{stage} {value:.1f} s' for stage, value in run.seconds.items())
-    print(f'{config.paths.results / name}: {len(results)} rows, store batch {run.version}')
-    print(f'Time: {timing}; links with negative volumes: {run.hot.negative_volume_links}')
-
-    if config.cold_start is not None:
-        start = time.perf_counter()
-        cold = compute_cold_emissions(config, run.activity, run.version)
-        cold_stem = f'{config.run.traffic_model}_{run.dates[0].year}_hbefa{config.run.hbefa_version}_batch{cold.version}'
-        name = f'cold_{cold_stem}.parquet'
-        cold_results(cold).to_parquet(config.paths.results / name)
-        cold.hourly.to_parquet(config.paths.results / f'cold_profile_{cold_stem}.parquet')
-        scaling_factors(cold.hourly.rename(columns={'emission_g': 'emission'})) \
-            .to_csv(config.paths.results / f'cold_timeprofile_{cold_stem}.csv', index=False)
-        starts = ', '.join(f'{vc} {value:.0f}' for vc, value in cold.daily_starts.items())
-        print(f'{config.paths.results / name}: {len(cold.links)} rows, {time.perf_counter() - start:.1f} s; '
-              f'daily starts within the boundary {starts}; temperature hours from the backup station '
-              f'{cold.temperature.from_backup}, interpolated {cold.temperature.interpolated}')
+    for line in run_inventory(config):
+        print(line)
     return 0
 
 

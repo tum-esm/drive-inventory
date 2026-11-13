@@ -21,6 +21,7 @@ from drive.domain.kernel import (
     hot_emissions,
     profile_frame,
     reference_shares,
+    scaling_factors,
     share_corrections,
 )
 from drive.domain.meteo import TemperatureReport, combine_stations, station_series, to_local_hourly
@@ -322,3 +323,42 @@ def cold_results(run: ColdRun) -> pd.DataFrame:
     keys = run.links[['road_link_id', 'from_node', 'piece', 'road_type', 'scaling_road_type']].copy()
     keys['length_km'] = run.links.length / 1000
     return pd.concat([keys, run.emissions.div(keys['length_km'], axis=0)], axis=1)
+
+
+def run_inventory(config: DriveConfig) -> list[str]:
+    """Hot and, with a cold_start section, cold start emissions of the run, written to paths.results.
+
+    Returns:
+        log lines: written files, timing and run reports
+    """
+    run_config, _ = _require(config)
+    results = config.paths.results
+    results.mkdir(parents=True, exist_ok=True)
+    log = []
+
+    hot = compute_hot_emissions(config)
+    mode = '_aggregated' if run_config.hot_mode == 'aggregated' else ''
+    stem = f'{run_config.traffic_model}_{hot.dates[0].year}_hbefa{run_config.hbefa_version}_batch{hot.version}'
+    table = hot_results(hot)
+    profile = hot_profile(hot, config)
+    table.to_parquet(results / f'hot_{stem}{mode}.parquet')
+    profile.to_parquet(results / f'hot_profile_{stem}{mode}.parquet')
+    scaling_factors(profile.rename(columns={'emission_g': 'emission'})) \
+        .to_csv(results / f'hot_timeprofile_{stem}{mode}.csv', index=False)
+    timing = ', '.join(f'{stage} {value:.1f} s' for stage, value in hot.seconds.items())
+    log += [f'{results / f"hot_{stem}{mode}.parquet"}: {len(table)} rows, store batch {hot.version}',
+            f'Time: {timing}; links with negative volumes: {hot.hot.negative_volume_links}']
+
+    if config.cold_start is not None:
+        start = time.perf_counter()
+        cold = compute_cold_emissions(config, hot.activity, hot.version)
+        cold_results(cold).to_parquet(results / f'cold_{stem}.parquet')
+        cold.hourly.to_parquet(results / f'cold_profile_{stem}.parquet')
+        scaling_factors(cold.hourly.rename(columns={'emission_g': 'emission'})) \
+            .to_csv(results / f'cold_timeprofile_{stem}.csv', index=False)
+        starts = ', '.join(f'{vc} {value:.0f}' for vc, value in cold.daily_starts.items())
+        log.append(f'{results / f"cold_{stem}.parquet"}: {len(cold.links)} rows, {time.perf_counter() - start:.1f} s, '
+                   f'start scaling {config.cold_start.start_scaling}; daily starts within the boundary {starts}; '
+                   f'temperature hours from the backup station {cold.temperature.from_backup}, '
+                   f'interpolated {cold.temperature.interpolated}')
+    return log

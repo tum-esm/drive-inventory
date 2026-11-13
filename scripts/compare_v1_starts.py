@@ -15,7 +15,7 @@ import geopandas as gpd
 import numpy as np
 
 from drive.config import load_config
-from drive.pipeline import clip_links, load_link_starts
+from drive.pipeline import clip_links, load_clip_boundary, load_link_starts
 
 RTOL = 1e-9  # v1 adds zone by zone, v2 sums per link: only the order of the sums differs
 
@@ -50,6 +50,9 @@ def main(config_path: str) -> int:
     if config.run is None or config.cold_start is None:
         raise ValueError('The config needs the run and cold_start sections')
     c = config.cold_start
+    config.run.clip_source = 'v1_file'  # v1's boundary
+    boundary = load_clip_boundary(config)
+    assert boundary is not None
     failed = False
     for model, m in config.traffic_models.items():
         year = model.removeprefix('visum')
@@ -66,8 +69,8 @@ def main(config_path: str) -> int:
             a, b = v1[f'{vc}_cold_starts'].to_numpy(), v2[f'{vc}_starts'].to_numpy()
             ok = len(a) == len(b) and np.allclose(a, b, rtol=RTOL, atol=0)
             rel = np.max(np.abs(a - b) / np.maximum(np.abs(a), 1e-300)) if len(a) == len(b) else np.nan
-            total_v1 = clipped_daily(v1, f'{vc}_cold_starts', config.paths.clip_boundary)
-            total_v2 = clipped_daily(v2, f'{vc}_starts', config.paths.clip_boundary)
+            total_v1 = clipped_daily(v1, f'{vc}_cold_starts', boundary)
+            total_v2 = clipped_daily(v2, f'{vc}_starts', boundary)
             ok &= bool(np.isclose(total_v1, total_v2, rtol=RTOL, atol=0))
             failed |= not ok
             print(f'  {vc}: {"identical" if ok else "DIFFERENT"} (max rel. diff {rel:.2g}); '

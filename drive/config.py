@@ -24,7 +24,7 @@ class PathsConfig(_Strict):
     data_root: Path
     store: Path = Path('restricted_input/drive.duckdb')
     calendar: Path = Path('auxiliary/calender_18to26.xlsx')  # v1's workbook, only read for comparisons with v1
-    clip_boundary: Path | None = None  # interim: read directly until `drive ingest boundaries` exists
+    clip_boundary: Path | None = None  # v1's boundary file, read only with run.clip_source: v1_file
     results: Path = Path('inventory/v2')
 
 
@@ -106,11 +106,19 @@ class MeteoIngest(_Strict):
     years: tuple[int, int]  # first and last year (inclusive), padded by a day for the conversion to local time
 
 
+class BoundariesIngest(_Strict):
+    """BKG VG250, see io.boundaries. Each download is kept as <directory>/vg250_<status date>.zip."""
+    url: str
+    directory: Path
+    levels: list[str] = ['lan', 'krs', 'gem']
+
+
 class IngestConfig(_Strict):
     counts: list[CountsSource] = []
     hbefa: HbefaIngest | None = None
     calendar: CalendarIngest | None = None
     meteo: MeteoIngest | None = None
+    boundaries: BoundariesIngest | None = None
 
 
 class TemperatureConfig(_Strict):
@@ -136,6 +144,8 @@ class RunConfig(_Strict):
     hot_mode: Literal['los_specific', 'aggregated'] = 'los_specific'  # traffic situation per link and hour, or one mean
     area_type: Literal['Urban', 'Motorway', 'Rural'] = 'Urban'
     temperature: TemperatureConfig | None = None  # needed for cold starts
+    clip_ags: str | None = None  # region (VG250 land area) the links are clipped to; None = no clipping
+    clip_source: Literal['store', 'v1_file'] = 'store'  # v1_file: paths.clip_boundary, for comparisons with v1
 
 
 class ColdStartConfig(_Strict):
@@ -206,6 +216,8 @@ class DriveConfig(_Strict):
             api = self.ingest.hbefa.api
             if api is not None and api.env_file is not None:
                 api.env_file = root / api.env_file
+        if self.ingest.boundaries is not None:
+            self.ingest.boundaries.directory = root / self.ingest.boundaries.directory
         if self.ingest.calendar is not None and self.ingest.calendar.overrides is not None:
             self.ingest.calendar.overrides = root / self.ingest.calendar.overrides
         return self

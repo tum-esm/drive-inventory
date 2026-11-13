@@ -25,6 +25,7 @@ from drive.domain.kernel import (
     share_corrections,
 )
 from drive.domain.meteo import TemperatureReport, combine_stations, station_series, to_local_hourly
+from drive.io.boundaries import LAND
 from drive.io.calendar_excel import read_calendar
 
 
@@ -195,11 +196,33 @@ class HotRun:
     activity: Activity
 
 
-def clip_links(links: gpd.GeoDataFrame, boundary_path) -> gpd.GeoDataFrame:
+def load_clip_boundary(config: DriveConfig, version: int | None = None) -> gpd.GeoDataFrame | None:
+    """The run's clip area: VG250 land area of run.clip_ags from the store, or v1's file; None = no clipping.
+
+    Args:
+        version: store batch id to read at, None = run.data_version
+    """
+    run, _ = _require(config)
+    if run.clip_source == 'v1_file':
+        if config.paths.clip_boundary is None:
+            raise ValueError('run.clip_source v1_file needs paths.clip_boundary')
+        return gpd.read_file(config.paths.clip_boundary)
+    if run.clip_ags is None:
+        return None
+    return store.read_boundary(config.paths.store, run.clip_ags, gf=LAND,
+                               data_version=run.data_version if version is None else version)
+
+
+def clip_to(links: gpd.GeoDataFrame, boundary: gpd.GeoDataFrame | None) -> gpd.GeoDataFrame:
+    """Links clipped to the boundary with a `piece` per part, or all links as piece 0 without one."""
+    return links.assign(piece=0) if boundary is None else clip_links(links, boundary)
+
+
+def clip_links(links: gpd.GeoDataFrame, boundary: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     """Clips links to a boundary, as v1 does. A link split by the boundary gives one row per `piece`."""
     if links.crs is None:
         raise ValueError('The links have no CRS, so they cannot be clipped')
-    boundary = gpd.read_file(boundary_path).to_crs(links.crs)
+    boundary = boundary.to_crs(links.crs)
     clipped = gpd.clip(links, boundary).explode(index_parts=True)
     clipped['piece'] = clipped.index.get_level_values(1)
     return clipped.reset_index(drop=True)
@@ -219,11 +242,8 @@ def compute_hot_emissions(config: DriveConfig) -> HotRun:
     seconds['activity'] = time.perf_counter() - start
 
     start = time.perf_counter()
-    links = store.read_links(config.paths.store, run.traffic_model, version)
-    if config.paths.clip_boundary is not None:
-        links = clip_links(links, config.paths.clip_boundary)
-    else:
-        links = links.assign(piece=0)
+    links = clip_to(store.read_links(config.paths.store, run.traffic_model, version),
+                    load_clip_boundary(config, version))
     params = kernel_params(config)
     corrections = share_corrections(links, activity.vehicle_shares, load_day_types(config, version), run.reference_year,
                                     run.reference_day_type)
@@ -288,11 +308,7 @@ def compute_cold_emissions(config: DriveConfig, activity: Activity | None = None
     links, starts_report = load_link_starts(config, version)
     columns = [f'{vc}_starts' for vc in c.vehicle_classes]
     per_metre = links[columns].div(links.length, axis=0).add_suffix('_per_m')
-    links = pd.concat([links, per_metre], axis=1)
-    if config.paths.clip_boundary is not None:
-        links = clip_links(links, config.paths.clip_boundary)
-    else:
-        links = links.assign(piece=0)
+    links = clip_to(pd.concat([links, per_metre], axis=1), load_clip_boundary(config, version))
     daily_starts = {vc: float((links[f'{vc}_starts_per_m'] * links.length).sum()) for vc in c.vehicle_classes}
 
     days = pd.date_range(run.start, run.end)

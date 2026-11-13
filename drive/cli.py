@@ -10,7 +10,7 @@ import pandas as pd
 from drive import __version__, store
 from drive.config import DriveConfig, load_config
 from drive.domain.calendar import build_calendar
-from drive.io import dwd, hbefa, hbefa_api
+from drive.io import boundaries, dwd, hbefa, hbefa_api
 from drive.io.calendar_holidays import read_holidays, read_overrides
 from drive.io.counts_preprocessed import read_preprocessed_counts
 from drive.io.visum import read_links, read_zones
@@ -132,6 +132,31 @@ def _ingest_calendar(args: argparse.Namespace) -> int:
     return 0
 
 
+def _ingest_boundaries(args: argparse.Namespace) -> int:
+    config = load_config(args.config)
+    b = config.ingest.boundaries
+    if b is None:
+        raise ValueError('No ingest.boundaries section in the config')
+    print(f'Store: {config.paths.store}')
+    if args.download:
+        print(f'Downloaded {boundaries.download(b.url, b.directory)}')
+    files = sorted(b.directory.glob('vg250_*.zip'))
+    if not files:
+        raise ValueError(f'No vg250_*.zip in {b.directory}, run with --download')
+    params = {'levels': b.levels}
+    for file in files:  # oldest status first, so the newest release is the latest batch
+        sha = store.file_sha256(file)
+        existing = store.find_batch(config.paths.store, 'boundaries', sha, params)
+        if existing is not None:
+            print(f'{file.name} already ingested as batch {existing}, skipped')
+            continue
+        table = boundaries.read_vg250(file, b.levels)
+        batch = store.write_batch(config.paths.store, 'boundaries', 'VG250', file, sha, params, {'boundaries': table})
+        print(f'{file.name} -> batch {batch}: {table["level"].value_counts().to_dict()} areas, '
+              f'status {table["status_date"].iloc[0].date()}')
+    return 0
+
+
 def _ingest_meteo(args: argparse.Namespace) -> int:
     config = load_config(args.config)
     m = config.ingest.meteo
@@ -199,6 +224,11 @@ def main(argv: list[str] | None = None) -> int:
     cal = sources.add_parser('calendar', help='day types from the holidays package and the override file')
     cal.add_argument('config', help='path to the run configuration (YAML)')
     cal.set_defaults(func=_ingest_calendar)
+
+    bounds = sources.add_parser('boundaries', help='BKG VG250 archives in ingest.boundaries.directory')
+    bounds.add_argument('config', help='path to the run configuration (YAML)')
+    bounds.add_argument('--download', action='store_true', help='first download the current release from ingest.boundaries.url')
+    bounds.set_defaults(func=_ingest_boundaries)
 
     meteo = sources.add_parser('meteo', help='DWD hourly temperatures of the stations under ingest.meteo')
     meteo.add_argument('config', help='path to the run configuration (YAML)')

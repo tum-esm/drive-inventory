@@ -18,7 +18,7 @@ import geopandas as gpd
 import pandas as pd
 import shapely
 
-from drive.schemas import CALENDAR_KEY, COUNT_KEY, EF_KEY, HOURS, TEMPERATURE_KEY
+from drive.schemas import BOUNDARY_KEY, CALENDAR_KEY, COUNT_KEY, EF_KEY, HOURS, TEMPERATURE_KEY
 
 DataVersion = int | datetime | None
 
@@ -130,6 +130,20 @@ CREATE TABLE IF NOT EXISTS temperatures (
     quality_level   BIGINT NOT NULL,
     archive         VARCHAR NOT NULL
 );
+CREATE TABLE IF NOT EXISTS boundaries (
+    batch_id    BIGINT NOT NULL,
+    source      VARCHAR NOT NULL,
+    status_date DATE NOT NULL,
+    level       VARCHAR NOT NULL,
+    ags         VARCHAR NOT NULL,
+    name        VARCHAR NOT NULL,
+    kind        VARCHAR NOT NULL,
+    gf          BIGINT NOT NULL,
+    part        BIGINT NOT NULL,
+    valid_from  DATE,
+    crs         VARCHAR NOT NULL,
+    geometry    BLOB NOT NULL
+);
 """
 
 # table -> key that identifies a row across batches (latest batch wins)
@@ -141,6 +155,7 @@ _KEYS = {
     'zones': ['traffic_model', 'zone_id'],
     'calendar': CALENDAR_KEY,
     'temperatures': TEMPERATURE_KEY,
+    'boundaries': BOUNDARY_KEY,
 }
 
 
@@ -405,6 +420,34 @@ def read_temperatures(store: Path,
         raise ValueError(f'No temperatures of station {station_id} in {store} for {start} to {end}')
     df['timestamp_utc'] = df['timestamp_utc'].astype('datetime64[us]')
     return df
+
+
+def read_boundary(store: Path, ags: str, source: str = 'VG250', gf: list[int] | None = None,
+                  data_version: DataVersion = None) -> gpd.GeoDataFrame:
+    """Rows of one area from the latest batch of a source (a release is a whole snapshot).
+
+    Args:
+        gf: only these Geofaktor values, e.g. [3, 4] for land
+
+    Raises:
+        ValueError: if the area is not in the store
+    """
+    version = resolve_version(store, data_version)
+    missing = f'No area {ags} of {source} in {store} up to batch {version}, run `drive ingest boundaries` first'
+    with _connect_read(store) as con:
+        try:
+            frame = con.execute("""
+                SELECT * FROM boundaries WHERE source = ? AND ags = ? AND batch_id = (
+                    SELECT max(batch_id) FROM boundaries WHERE source = ? AND batch_id <= ?
+                ) ORDER BY level, gf, part""", [source, ags, source, version]).df()
+        except duckdb.CatalogException as error:
+            raise ValueError(missing) from error
+    if gf is not None:
+        frame = frame[frame['gf'].isin(gf)]
+    if frame.empty:
+        raise ValueError(missing)
+    frame['geometry'] = frame['geometry'].map(bytes)
+    return _to_geo(frame.reset_index(drop=True))
 
 
 def read_batches(store: Path) -> pd.DataFrame:

@@ -253,6 +253,7 @@ def check_aggregated(config, params) -> bool:
 def main(config_path: str = 'configs/munich_2025.yaml') -> int:
     config = load_config(config_path)
     config.run.calendar_source = 'v1_workbook'  # v1's day types and profile groups
+    config.run.clip_source = 'v1_file'  # v1's boundary
     params = kernel_params(config)
     baseline = gpd.read_file(config.paths.data_root / BASELINE)
 

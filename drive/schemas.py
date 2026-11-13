@@ -216,3 +216,28 @@ TEMPERATURES = pa.DataFrameSchema(
     ordered=True,
     coerce=True,
 )
+
+BOUNDARY_KEY = ['source', 'level', 'ags', 'gf', 'part']
+
+# Administrative areas (BKG VG250), one row per level, AGS, GF (Geofaktor: 1/2 water, 3/4 land) and part
+# (water areas of coastal states and districts come as several features).
+# status_date: date the data refers to; valid_from: start of the area's current state
+BOUNDARIES = pa.DataFrameSchema(
+    {
+        'source': pa.Column(str),
+        'status_date': pa.Column('datetime64[us]'),
+        'level': pa.Column(str),
+        'ags': pa.Column(str, pa.Check.str_matches(r'^\d{2,8}$')),
+        'name': pa.Column(str),
+        'kind': pa.Column(str),
+        'gf': pa.Column('int64', pa.Check.isin([1, 2, 3, 4])),
+        'part': pa.Column('int64', pa.Check.ge(0)),
+        'valid_from': pa.Column('datetime64[us]', nullable=True),
+        'crs': pa.Column(str),
+        'geometry': pa.Column(object, pa.Check(_is_wkb, error='geometry must be WKB')),
+    },
+    unique=BOUNDARY_KEY,
+    strict=True,
+    ordered=True,
+    coerce=True,
+)

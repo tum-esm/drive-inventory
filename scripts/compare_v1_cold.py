@@ -88,6 +88,7 @@ def main(config_path: str) -> int:
     if config.run is None:
         raise ValueError('The config needs the run section')
     config.run.calendar_source = 'v1_workbook'  # v1's day types and profile groups
+    config.run.clip_source = 'v1_file'  # v1's boundary
     if config.cold_start is None:
         raise ValueError('The config needs the cold_start section')
     config.cold_start.start_scaling = 'v1_share'  # v1's start profile (spec R40)

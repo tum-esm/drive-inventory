@@ -5,7 +5,7 @@ paths:
   data_root: ../data
   store: restricted_input/drive.duckdb
   calendar: auxiliary/calender_18to26.xlsx   # v1's workbook, only read for comparisons with v1
-  clip_boundary: geodata/munich_boarders.gpkg
+  clip_boundary: geodata/munich_boarders.gpkg   # v1's boundary, only read with run.clip_source: v1_file
   results: inventory/v2
 
 # VISUM models: raw exports; counter -> link matchings are stored per model for links that exist in it
@@ -105,6 +105,11 @@ ingest:
     years: [2018, 2026]
     public_categories: [public, catholic]
     overrides: auxiliary/calendar_overrides_munich.csv
+  # BKG VG250 administrative areas (open data, dl-de/by-2-0), status 1 January of each release
+  boundaries:
+    url: https://daten.gdz.bkg.bund.de/produkte/vg/vg250_ebenen_0101/aktuell/vg250_01-01.utm32s.gpkg.ebenen.zip
+    directory: geodata/vg250
+    levels: [lan, krs, gem]
   # DWD hourly temperature: 03379 München-Stadt, 01262 München-Flughafen (backup)
   meteo:
     stations: ['03379', '01262']
@@ -123,6 +128,7 @@ run:
   hot_ambient_pattern: T+25°C,tØ,dØ    # v1 behaviour, R33 will select it by temperature
   area_type: Urban
   hot_mode: los_specific               # or aggregated: one mean factor (tables for 2024 and 2025 only)
+  clip_ags: '09162000'                 # München, VG250 land area
   temperature:                         # v1 notebook 11 settings
     station: '03379'
     backup_station: '01262'

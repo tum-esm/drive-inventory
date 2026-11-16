@@ -27,7 +27,7 @@ from run_series import SERIES, series_config
 from drive import store
 from drive.config import load_config
 from drive.domain.counts_qa import iqr_mean, link_attributes
-from drive.pipeline import load_link_counts
+from drive.pipeline import load_counter_links, load_link_counts
 
 CLASSES = ['SUM', 'PC', 'LCV', 'HGV']
 
@@ -46,11 +46,10 @@ def link_table(config, road_type: str) -> pd.DataFrame:
     flags = in_reference.groupby('road_link_id')[['valid', 'complete', 'road_type']].first()
     model = link_attributes(store.read_links(config.paths.store, run.traffic_model, version)).loc[observed.index]
 
-    detectors = store.read_counter_links(config.paths.store, run.traffic_model, version)
-    detectors = detectors[detectors['road_link_id'].isin(observed.index)] \
+    matching, _ = load_counter_links(config, version)  # with the overrides (R26)
+    detectors = matching[matching['road_link_id'].isin(observed.index)] \
         .groupby('road_link_id')['detector_id'].agg(lambda d: ' '.join(sorted(d)))
-    sources = store.read_counter_links(config.paths.store, run.traffic_model, version) \
-        .groupby('road_link_id')['source'].first()
+    sources = matching.groupby('road_link_id')['source'].first()
 
     t = pd.DataFrame(index=observed.index)
     t['source'] = sources.reindex(t.index)

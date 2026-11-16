@@ -58,6 +58,7 @@ class QAParams:
 class QAReport:
     rows: dict[str, int] = field(default_factory=dict)  # rows after each step
     incomplete_days: int = 0  # link-days (per class) dropped by link_volumes, see drop_incomplete_days
+    counter_link_overrides: list[str] = field(default_factory=list)  # applied corrections of the matching (R26)
     outliers: int = 0
     links: int = 0
     links_valid: int = 0

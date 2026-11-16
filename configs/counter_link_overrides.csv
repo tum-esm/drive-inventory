@@ -1,0 +1,4 @@
+# Corrections of the detector -> road link matching (spec R26, drive/io/counter_links.py).
+# road_link_id empty: the detector is excluded. traffic_model empty: every model. Every row needs a reason.
+source,detector_id,traffic_model,road_link_id,reason
+BASt,97742,,48217,"Station 9774 had both directions on link 48191 (westbound, the model has separate carriageways). 97742 counts eastbound: its hourly profile matches the eastbound detector 97721 (r = 0.995); 48217 is the parallel eastbound carriageway (15 m apart, bearing 93 degrees)"

@@ -56,6 +56,7 @@ flowchart LR
 ```
 
 - **Versioning:** every ingest writes a new batch only if its input changed. A run reads the store as of `run.data_version` (a batch id or a time stamp; empty means the latest batch), so it can be reproduced later.
+- **Counter link overrides:** corrections of the manual detector -> link matching are kept in git in `configs/counter_link_overrides.csv`, one row per detector with a reason (move to another link, or exclude; optionally per traffic model). They are applied when a run reads the matching (`pipeline.load_counter_links`, spec R26). Today: BASt 97742 moved to the eastbound carriageway 48217.
 - **BASt sources:** the counts come from the annual station files for 2018–2020 and from the raw archives from 2021 on. `drive ingest bast --download` is meant for a monthly cron job. See [bast_counts_README.md](bast_counts_README.md).
 
 ## `drive run`: from counts to emissions

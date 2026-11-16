@@ -295,3 +295,4 @@ After a change, check:
 | Raw-data layout | file names `<state><station>.<yy><month code>` and the `H`/`R`/`S` header lines as above; the format version in the `H` line (`V2.0`) |
 | Class definitions | the class sums: without `Sat` they must equal KFZ, with `Sat` they must not |
 | Station set | stations in `bast_locations_selected.gpkg` (42 stations, 84 detectors) |
+| Matching | corrections of the detector -> link matching go in `configs/counter_link_overrides.csv` (spec R26), with a reason per row; `drive run` prints every applied override |

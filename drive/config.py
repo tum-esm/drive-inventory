@@ -182,6 +182,7 @@ class CountsQAConfig(_Strict):
     """Settings of domain.counts_qa (defaults from v1 data_preprocessing/31)."""
     period_start: date
     period_end: date
+    counter_link_overrides: Path | None = None  # corrections of the detector -> link matching (R26), see io.counter_links
     hourly_daily_tolerance: float = 0.025
     min_daily_value: float = 1.0
     outlier_z_threshold: float = 3.5
@@ -247,6 +248,8 @@ class DriveConfig(_Strict):
         self.paths.results = root / self.paths.results
         for grid in self.outputs.grids.values():
             grid.path = root / grid.path
+        if self.counts_qa is not None and self.counts_qa.counter_link_overrides is not None:
+            self.counts_qa.counter_link_overrides = (root / self.counts_qa.counter_link_overrides).resolve()
         for m in self.traffic_models.values():
             m.links = root / m.links
             m.zones = root / m.zones

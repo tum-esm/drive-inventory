@@ -165,6 +165,8 @@ cold_start:
 
 # Counts quality control (v1 data_preprocessing/31 settings)
 counts_qa:
+  # corrections of the detector -> link matching, in git (spec R26); relative to paths.data_root
+  counter_link_overrides: ../configs/counter_link_overrides.csv
   period_start: 2019-01-01   # outliers are detected over the whole period, so it affects every year (Q22)
   period_end: 2025-12-31
   hourly_daily_tolerance: 0.025

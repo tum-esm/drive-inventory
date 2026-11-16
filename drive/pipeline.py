@@ -33,6 +33,7 @@ from drive.domain.kernel import (
 )
 from drive.domain.meteo import TemperatureReport, combine_stations, station_series, to_local_hourly
 from drive.io.boundaries import LAND
+from drive.io.counter_links import apply_overrides, read_overrides
 
 
 def _require(config: DriveConfig):
@@ -126,6 +127,21 @@ def load_temperature(config: DriveConfig,
     return temperature, TemperatureReport(from_backup=from_backup, interpolated=interpolated)
 
 
+def load_counter_links(config: DriveConfig, version: int) -> tuple[pd.DataFrame, list[str]]:
+    """Detector -> link matching of the run's traffic model, with the overrides of
+    counts_qa.counter_link_overrides applied (R26).
+
+    Returns:
+        COUNTER_LINKS rows, and one line per applied override
+    """
+    run, qa = _require(config)
+    links = store.read_counter_links(config.paths.store, run.traffic_model, version)
+    if qa.counter_link_overrides is None:
+        return links, []
+    model_link_ids = set(store.read_links(config.paths.store, run.traffic_model, version)['road_link_id'])
+    return apply_overrides(links, read_overrides(qa.counter_link_overrides), run.traffic_model, model_link_ids)
+
+
 def load_link_counts(config: DriveConfig) -> tuple[pd.DataFrame, QAReport, int]:
     """Quality-controlled link counts (LINK_COUNTS) of the run's traffic model.
 
@@ -136,7 +152,7 @@ def load_link_counts(config: DriveConfig) -> tuple[pd.DataFrame, QAReport, int]:
     version = store.resolve_version(config.paths.store, run.data_version)
     raw = store.read_counts(config.paths.store, version, metric='volume', linked_in=run.traffic_model,
                             start=qa.period_start.isoformat(), end=qa.period_end.isoformat())
-    links = store.read_counter_links(config.paths.store, run.traffic_model, version)
+    links, overrides = load_counter_links(config, version)
     attributes = link_attributes(store.read_links(config.paths.store, run.traffic_model, version))
 
     params = QAParams(reference_year=run.reference_year,
@@ -163,6 +179,7 @@ def load_link_counts(config: DriveConfig) -> tuple[pd.DataFrame, QAReport, int]:
                                       params.missing_flags, params.drop_incomplete_days)
     link_counts, report = qa_link_counts(volume, attributes, params)
     report.incomplete_days = incomplete
+    report.counter_link_overrides = overrides
     return link_counts, report, version
 
 
@@ -410,6 +427,8 @@ def run_inventory(config: DriveConfig) -> list[str]:
                             for c, g in outliers.groupby('vehicle_class'))
         log.append(f'Implausible class shares removed (counts QA): {removed or "none"}')
     log.append(f'Incomplete link-days dropped (counts QA, per class): {hot.report.incomplete_days}')
+    for line in hot.report.counter_link_overrides:
+        log.append(f'Counter link override: {line}')
 
     tables, layers = {'hot': table}, {'hot': outputs.line_sources(hot.links, table)}
     if config.cold_start is not None:

@@ -7,7 +7,7 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 
-from drive import store
+from drive import outputs, store
 from drive.config import DriveConfig
 from drive.domain.activity import Activity
 from drive.domain.calendar import DAY_GROUPS, OUTLIER_GROUPS, calendar_day_types
@@ -374,6 +374,11 @@ def cold_results(run: ColdRun) -> pd.DataFrame:
 def run_inventory(config: DriveConfig) -> list[str]:
     """Hot and, with a cold_start section, cold start emissions of the run, written to paths.results.
 
+    Files per run (<stem> = model_year_hbefa<version>_batch<id>): hot_/cold_<stem>.parquet (g/km per link piece),
+    hot_/cold_profile_<stem>.parquet (hourly g per road type or class), hot_/cold_timeprofile_<stem>.csv,
+    linesource_<stem>.gpkg (layers hot and cold, g/km with geometry) and summary_<stem>.csv (t per kind, road type,
+    vehicle class and component), see drive.outputs (R12).
+
     Returns:
         log lines: written files, timing and run reports
     """
@@ -405,10 +410,13 @@ def run_inventory(config: DriveConfig) -> list[str]:
         log.append(f'Implausible class shares removed (counts QA): {removed or "none"}')
     log.append(f'Incomplete link-days dropped (counts QA, per class): {hot.report.incomplete_days}')
 
+    tables, layers = {'hot': table}, {'hot': outputs.line_sources(hot.links, table)}
     if config.cold_start is not None:
         start = time.perf_counter()
         cold = compute_cold_emissions(config, hot.activity, hot.version)
-        cold_results(cold).to_parquet(results / f'cold_{stem}.parquet')
+        cold_table = cold_results(cold)
+        cold_table.to_parquet(results / f'cold_{stem}.parquet')
+        tables['cold'], layers['cold'] = cold_table, outputs.line_sources(cold.links, cold_table)
         cold.hourly.to_parquet(results / f'cold_profile_{stem}.parquet')
         scaling_factors(cold.hourly.rename(columns={'emission_g': 'emission'})) \
             .to_csv(results / f'cold_timeprofile_{stem}.csv', index=False)
@@ -417,4 +425,13 @@ def run_inventory(config: DriveConfig) -> list[str]:
                    f'start scaling {config.cold_start.start_scaling}; daily starts within the boundary {starts}; '
                    f'temperature hours from the backup station {cold.temperature.from_backup}, '
                    f'interpolated {cold.temperature.interpolated}')
+
+    start = time.perf_counter()
+    linesource = results / f'linesource_{stem}{mode}.gpkg'
+    outputs.write_line_sources(linesource, layers)
+    summary = outputs.summary(tables)
+    summary.to_csv(results / f'summary_{stem}{mode}.csv', index=False)
+    totals = summary[summary['component'] == 'CO2(rep)'].groupby('kind')['emission_t'].sum()
+    log.append(f'{linesource} (layers {", ".join(layers)}) and summary_{stem}{mode}.csv, '
+               f'{time.perf_counter() - start:.1f} s; CO2(rep) t: {totals.round(0).to_dict()}')
     return log

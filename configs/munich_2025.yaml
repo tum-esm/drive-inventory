@@ -165,13 +165,14 @@ cold_start:
 counts_qa:
   period_start: 2019-01-01   # outliers are detected over the whole period, so it affects every year (Q22)
   period_end: 2025-12-31
-  completeness_window: [2025-01-01, 2025-12-31]
   hourly_daily_tolerance: 0.025
   min_daily_value: 1
   outlier_z_threshold: 3.5
   sqv_f: 10000
   sqv_threshold: 0.6
-  completeness_threshold: 0.6
+  # a counter is used for year Y only if it is valid (SQV above sqv_threshold in the reference year) and has SUM data
+  # on at least completeness_threshold of the days of the reference year and of Y (spec R46, D29)
+  completeness_threshold: 0.8
   iqr_range: [2.5, 97.5]
   # incomplete link-days (spec R41, D28): BASt flags a (missing), d (faulty), x (class not counted) mark an hour as
   # missing; a link-day with a missing hour or a detector without a row is dropped. Estimates (s, k) are kept

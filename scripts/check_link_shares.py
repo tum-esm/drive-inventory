@@ -41,7 +41,9 @@ def link_table(config, road_type: str) -> pd.DataFrame:
     observed = reference.groupby(['road_link_id', 'vehicle_class'])['daily_value'] \
         .apply(iqr_mean, iqr_range=qa.iqr_range).unstack('vehicle_class')[CLASSES]
     days = reference[reference['vehicle_class'] == 'SUM'].groupby('road_link_id').size()
-    flags = counts.groupby('road_link_id')[['valid', 'complete', 'road_type']].first()
+    # flags of the reference year: valid, and complete in it (R46)
+    in_reference = counts[counts['date'].dt.year == run.reference_year]
+    flags = in_reference.groupby('road_link_id')[['valid', 'complete', 'road_type']].first()
     model = link_attributes(store.read_links(config.paths.store, run.traffic_model, version)).loc[observed.index]
 
     detectors = store.read_counter_links(config.paths.store, run.traffic_model, version)

@@ -8,7 +8,8 @@ compared with v1 TrafficCounts on the same input. It must be identical.
 Reported, not checked: the counts QA (data_preprocessing/31 -> counting_data_combined.parquet) and the full
 chain (store -> QA -> Activity) against v1 for both periods. v2 now differs from v1 on purpose: counts from
 the raw exports and archives (BASt 2021-2022 raw instead of annual, flags), the store calendar (D22), R3
-(links without data in the completeness window are incomplete) and the class-share check (R44). Until the switch to the raw ingests, the only
+(links without data in the completeness window are incomplete), the class-share check (R44) and the
+completeness per year (R46: valid and >= 80 % in the reference year and the year, only those rows go into Activity). Until the switch to the raw ingests, the only
 differences were R3 and BASt's -1 markers (commit cc324e9).
 """
 
@@ -34,6 +35,7 @@ V1_FILE = 'restricted_input/counting_data/counting_data_combined.parquet'
 V1_FILE_FROM_2018 = 'restricted_input/counting_data/counting_data_combined_from2018.parquet'
 KEY = ['road_link_id', 'vehicle_class', 'date']
 FLOAT_TOLERANCE = 1e-9
+V1_COMPLETENESS_THRESHOLD = 0.6  # v1: share of the best covered link's days in the window
 
 
 def load_v1(data_root: Path, file: str = V1_FILE) -> pd.DataFrame:
@@ -70,8 +72,7 @@ def compare_link_counts(config) -> bool:
     for col in ['sqv', 'completeness', 'daily_value'] + HOURS:
         a, b = merged[f'{col}_v1'], merged[f'{col}_v2']
         differs |= both & ~np.isclose(a, b, rtol=1e-9, atol=1e-9, equal_nan=True)
-    v1_rule = (merged['completeness_v2'] > config.counts_qa.completeness_threshold) | (merged['completeness_v2'] == 0)
-    differs |= both & (merged['complete_v1'] != v1_rule)
+    differs |= both & (merged['complete_v1'] != merged['complete_v2'])  # v2: per year (R46)
 
     markers = marker_link_classes(config).assign(_marker=True)
     diff = merged[differs].merge(markers, on=['road_link_id', 'vehicle_class'], how='left')
@@ -162,7 +163,6 @@ def compare_chain(config, start: date, v1_file: str, traffic_model: str, referen
     """
     config = config.model_copy(deep=True)
     config.counts_qa.period_start = start
-    config.counts_qa.completeness_window = (date(reference_year, 1, 1), date(reference_year, 12, 31))
     config.run.traffic_model = traffic_model
     config.run.reference_year = reference_year
     run = config.run
@@ -171,12 +171,12 @@ def compare_chain(config, start: date, v1_file: str, traffic_model: str, referen
 
     v2, report, version = load_activity(config)
     print(f'  store batch {version}; links {report.links}, valid {report.links_valid}, '
-          f'complete {report.links_complete}; missing days { {k: len(v) for k, v in v2.missing_days.items()} }; '
+          f'complete in the reference year {report.links_complete_reference}; missing days { {k: len(v) for k, v in v2.missing_days.items()} }; '
           f'NaN hours { {k: int(v.isna().any(axis=1).sum()) for k, v in v2.timeprofile.items()} }')
 
     day_types = load_day_types(config)
     v1_rows = load_v1(config.paths.data_root, v1_file)
-    v1_r3_rows = v1_rows.assign(complete=v1_rows['completeness'] > config.counts_qa.completeness_threshold)
+    v1_r3_rows = v1_rows.assign(complete=v1_rows['completeness'] > V1_COMPLETENESS_THRESHOLD)
     v1 = Activity(v1_rows, day_types, run.reference_year, run.reference_day_type)
     v1_r3 = Activity(v1_r3_rows, day_types, run.reference_year, run.reference_day_type)
     _print_effect('R3 (v1 with the R3 rule vs v1)', v1_r3, v1)

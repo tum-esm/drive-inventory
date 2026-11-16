@@ -180,13 +180,12 @@ class CountsQAConfig(_Strict):
     """Settings of domain.counts_qa (defaults from v1 data_preprocessing/31)."""
     period_start: date
     period_end: date
-    completeness_window: tuple[date, date]
     hourly_daily_tolerance: float = 0.025
     min_daily_value: float = 1.0
     outlier_z_threshold: float = 3.5
     sqv_f: float = 10000.0
     sqv_threshold: float = 0.6
-    completeness_threshold: float = 0.6
+    completeness_threshold: float = 0.8  # share of the days of the reference year and of the scaling year (R46)
     iqr_range: tuple[float, float] = (2.5, 97.5)
     # incomplete link-days (R41): hours with these flags count as missing; drop link-days with a missing hour or detector.
     # Defaults reproduce v1 (flags ignored, missing values summed as 0)

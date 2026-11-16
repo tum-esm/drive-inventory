@@ -3,7 +3,7 @@
 import numpy as np
 import pandas as pd
 
-from drive.domain.counts_qa import QAParams, _drop_share_outliers, link_volumes
+from drive.domain.counts_qa import QAParams, _drop_share_outliers, link_volumes, qa_link_counts
 from drive.schemas import HOURS
 
 ROAD = 'Motorway-Nat'
@@ -24,8 +24,7 @@ def test_share_check_removes_only_the_faulty_class_and_year():
             rows += [(link, 'SUM', date, 1000.0), (link, 'LCV', date, 1000.0 * lcv)]
     volume = pd.DataFrame(rows, columns=['road_link_id', 'vehicle_class', 'date', 'daily_value'])
     volume['scaling_road_type'] = ROAD
-    params = QAParams(reference_year=2025, reference_day_type=0, completeness_window=('2025-01-01', '2025-12-31'),
-                      share_check_classes=('LCV',))
+    params = QAParams(reference_year=2025, reference_day_type=0, share_check_classes=('LCV',))
 
     kept, flagged = _drop_share_outliers(volume, params)
 
@@ -68,3 +67,31 @@ def test_incomplete_link_days_are_dropped_not_summed_as_zero():
 
     assert dict(zip(volume['date'].dt.day, volume['daily_value'])) == {4: 4800.0, 7: 4800.0}
     assert dropped == 2
+
+
+def test_counter_is_used_only_for_years_complete_together_with_the_reference_year():
+    """Reference year 2025, scaling year 2024, 1000 vehicles a day on every counted day (R46, D29).
+
+    Link 1: all days of 2024 and 2025 -> used in both years.
+    Link 2: all of 2024, only 40 % of 2025 -> no unbiased scaling, used in no year.
+    Link 3: all of 2025, 50 % of 2024 -> used in 2025 only.
+    Catches the v1 rule (one flag per link from the reference year) and a relative threshold.
+    """
+    days_2024, days_2025 = pd.date_range('2024-01-01', '2024-12-31'), pd.date_range('2025-01-01', '2025-12-31')
+    coverage = {1: (days_2024, days_2025), 2: (days_2024, days_2025[:146]), 3: (days_2024[:183], days_2025)}
+    rows = []
+    for link, (a, b) in coverage.items():
+        for date in a.append(b):
+            rows.append({'road_link_id': link, 'vehicle_class': 'SUM', 'date': date, 'road_type': ROAD,
+                         'day_type': 0, 'daily_value': 1000.0, **{h: 1000.0 / 24 for h in HOURS}})
+    volume = pd.DataFrame(rows)
+    volume['date'] = volume['date'].astype('datetime64[us]')
+    attributes = pd.DataFrame({'dtv_SUM': 1000.0, 'dtv_PC': 0.0, 'dtv_LCV': 0.0, 'dtv_HGV': 0.0}, index=[1, 2, 3])
+    params = QAParams(reference_year=2025, reference_day_type=0, completeness_threshold=0.8)
+
+    counts, report = qa_link_counts(volume, attributes, params)
+
+    usable = counts[counts['valid'] & counts['complete']]
+    assert usable.groupby(usable['date'].dt.year)['road_link_id'].unique().map(sorted).to_dict() == \
+        {2024: [1], 2025: [1, 3]}
+    assert report.usable_links == {2024: 1, 2025: 2}

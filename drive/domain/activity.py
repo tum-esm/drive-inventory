@@ -8,6 +8,9 @@ Behaviour kept from v1 for comparability (candidates for later method decisions)
 - diurnal cycles ignore road type and the complete/valid flags
 - annual cycles use complete links, without the valid flag; vehicle shares use complete
   and valid links
+In the pipeline these filters no longer matter: `pipeline.load_activity` passes only rows that are
+valid and complete for their year (spec R46, D29), so all three use the same counters per year.
+The class itself is unchanged, so that it stays identical to v1 on v1's input.
 - fill_gaps smooths over 5 consecutive (year, ISO week, day type) rows, so the window mixes
   day types and spans about one week, not 5 weeks
 Deliberate change: days without data still give zeros in the time profile, but they are

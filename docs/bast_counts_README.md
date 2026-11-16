@@ -283,7 +283,7 @@ BUS reacts most, because its share is the median BUS volume over few links and b
 
 ## Open points
 
-- Completeness (spec R46, to implement). The intended rule: a link scales year Y only if it is at least 80 % complete in the reference year and in Y, each year on its own. The code still decides one flag per link from the reference year, with threshold 0.6 relative to the best-covered link (v1).
+- Completeness is now per year (spec R46, D29): a counter is used for year Y only if it is valid and has data on at least 80 % of the days of the reference year and of Y. 2018 with the 2019 model has few usable city counters, see spec R47.
 
 After a change, check:
 

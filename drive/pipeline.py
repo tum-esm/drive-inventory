@@ -127,13 +127,13 @@ def load_link_counts(config: DriveConfig) -> tuple[pd.DataFrame, QAReport, int]:
 
     params = QAParams(reference_year=run.reference_year,
                       reference_day_type=run.reference_day_type,
-                      completeness_window=(qa.completeness_window[0].isoformat(), qa.completeness_window[1].isoformat()),
                       hourly_daily_tolerance=qa.hourly_daily_tolerance,
                       min_daily_value=qa.min_daily_value,
                       outlier_z_threshold=qa.outlier_z_threshold,
                       sqv_f=qa.sqv_f,
                       sqv_threshold=qa.sqv_threshold,
                       completeness_threshold=qa.completeness_threshold,
+                      period=(qa.period_start.isoformat(), qa.period_end.isoformat()),
                       iqr_range=qa.iqr_range,
                       scaling_road_types=config.scaling_road_types,
                       outlier_groups=OUTLIER_GROUPS,
@@ -155,12 +155,16 @@ def load_link_counts(config: DriveConfig) -> tuple[pd.DataFrame, QAReport, int]:
 def load_activity(config: DriveConfig) -> tuple[Activity, QAReport, int]:
     """Traffic activity of the run: store -> counts QA -> Activity.
 
+    Only rows of counters that are valid and complete for their year go into Activity (spec R46, D29), so the
+    daily scaling, vehicle shares and diurnal cycles of a year all come from the same counters.
+
     Returns:
         activity, QA report, and the store batch id the data was read at
     """
     run, _ = _require(config)
     link_counts, report, version = load_link_counts(config)
-    activity = Activity(link_counts, load_day_types(config, version), run.reference_year, run.reference_day_type,
+    usable = link_counts[link_counts['valid'] & link_counts['complete']].reset_index(drop=True)
+    activity = Activity(usable, load_day_types(config, version), run.reference_year, run.reference_day_type,
                         DAY_GROUPS)
     return activity, report, version
 

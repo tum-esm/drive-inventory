@@ -2,12 +2,20 @@
 
 Steps: aggregate detectors per link, add road and day types, check hourly vs daily
 consistency, remove outliers, remove implausible class shares, validate against the traffic
-model (SQV) and flag completeness in the reference window.
+model (SQV) and flag completeness per year.
+
+A counter (link) is used for year Y only if it is valid and complete for Y (spec R46, D29):
+- valid: the SQV of its reference-year normal-weekday mean against the model DTV is above
+  `sqv_threshold`. A counter that doesn't match the model is more likely wrong or assigned to the
+  wrong link than the model is wrong, so it is dropped for every year.
+- complete for Y: it has SUM data on at least `completeness_threshold` of the days of the reference
+  year and of Y, each year on its own. Without enough reference-year data no unbiased scaling is
+  possible.
 
 Behaviour kept from v1 for comparability (candidates for later method decisions):
 - outliers are detected per (link, vehicle class, day type group) over all years at once
-Deliberate changes: links without data in the completeness window are incomplete (R3), v1
-marked them complete. Implausible class shares are removed per link and year (R44, not in v1).
+Deliberate changes: completeness per year as above (R46); v1 had one flag per link from a window,
+relative to the best covered link (and R3: links without data in it were complete). Implausible class shares are removed per link and year (R44, not in v1).
 Incomplete link-days are dropped (R41, D28): hours with a missing-value flag or without a value, and
 days on which a detector of the link didn't report; v1 summed missing values as 0.
 """
@@ -28,13 +36,13 @@ KEY = ['road_link_id', 'vehicle_class', 'date']
 class QAParams:
     reference_year: int
     reference_day_type: int
-    completeness_window: tuple[str, str]
     hourly_daily_tolerance: float = 0.025
     min_daily_value: float = 1.0
     outlier_z_threshold: float = 3.5
     sqv_f: float = 10000.0
     sqv_threshold: float = 0.6
-    completeness_threshold: float = 0.6
+    completeness_threshold: float = 0.8  # share of the days of a year with SUM data, see the module docstring
+    period: tuple[str, str] | None = None  # counts period; a year's days are counted inside it (None: whole years)
     iqr_range: tuple[float, float] = (2.5, 97.5)
     scaling_road_types: dict[str, str] = field(default_factory=dict)
     outlier_groups: Mapping[int, int] | None = None  # outlier groups, None keeps every day type on its own (v1)
@@ -53,8 +61,8 @@ class QAReport:
     outliers: int = 0
     links: int = 0
     links_valid: int = 0
-    links_complete: int = 0
-    links_without_window_data: list[int] = field(default_factory=list)  # R3: incomplete in v2, complete in v1
+    links_complete_reference: int = 0  # links complete in the reference year
+    usable_links: dict[int, int] = field(default_factory=dict)  # year -> links valid and complete for that year
     share_outliers: pd.DataFrame | None = None  # link-years whose class counts were removed, see _drop_share_outliers
 
 
@@ -163,6 +171,13 @@ def _drop_outliers(volume: pd.DataFrame,
     return volume[~outlier], int(outlier.sum())
 
 
+def _days_in_year(year: int, period: tuple[str, str] | None) -> int:
+    start, end = pd.Timestamp(year, 1, 1), pd.Timestamp(year, 12, 31)
+    if period is not None:
+        start, end = max(start, pd.Timestamp(period[0])), min(end, pd.Timestamp(period[1]))
+    return max((end - start).days + 1, 0)
+
+
 def class_shares(volume: pd.DataFrame, classes: tuple[str, ...], min_days: int = 1) -> pd.DataFrame:
     """Annual share of each class in SUM per link, over the days on which both are counted.
 
@@ -263,19 +278,27 @@ def qa_link_counts(volume: pd.DataFrame,
     valid_links = sqv_per_class.index[sqv_per_class['SUM'] > params.sqv_threshold]
     volume['valid'] = volume['road_link_id'].isin(valid_links)
 
-    # completeness: SUM days in the window relative to the best covered link
-    start, end = params.completeness_window
-    window = volume[(volume['vehicle_class'] == 'SUM') & volume['date'].between(start, end)]
-    days = window.groupby('road_link_id')['daily_value'].count()
-    completeness = days / days.max()
-    volume['completeness'] = volume['road_link_id'].map(completeness).fillna(0.0)
-    volume['complete'] = volume['completeness'] > params.completeness_threshold  # R3: 0 is incomplete
+    # completeness per link and year: SUM days with data over the days of the year (inside the counts period)
+    year = volume['date'].dt.year
+    totals = volume[volume['vehicle_class'] == 'SUM']
+    days = totals.groupby([totals['road_link_id'], totals['date'].dt.year.rename('year')])['date'].nunique()
+    days_in_year = pd.Series({y: _days_in_year(y, params.period) for y in days.index.get_level_values('year').unique()})
+    denominator = days_in_year.reindex(days.index.get_level_values('year')).to_numpy()
+    completeness = (days / denominator).rename('completeness')
+    pairs = pd.MultiIndex.from_arrays([volume['road_link_id'], year])
+    volume['completeness'] = completeness.reindex(pairs).fillna(0.0).to_numpy()
+    reference = completeness.xs(params.reference_year, level='year') if params.reference_year in days_in_year else \
+        pd.Series(dtype=float)
+    reference_complete = volume['road_link_id'].map(reference).fillna(0.0) >= params.completeness_threshold
+    volume['complete'] = reference_complete & (volume['completeness'] >= params.completeness_threshold)
 
-    links = volume.groupby('road_link_id')[['valid', 'complete', 'completeness']].first()
+    links = volume.groupby('road_link_id')['valid'].first()
     report.links = len(links)
-    report.links_valid = int(links['valid'].sum())
-    report.links_complete = int(links['complete'].sum())
-    report.links_without_window_data = sorted(links.index[links['completeness'] == 0].tolist())
+    report.links_valid = int(links.sum())
+    report.links_complete_reference = int((reference >= params.completeness_threshold).sum())
+    usable = volume[volume['valid'] & volume['complete']]
+    report.usable_links = {int(y): int(n) for y, n in
+                           usable.groupby(usable['date'].dt.year)['road_link_id'].nunique().items()}
 
     columns = list(LINK_COUNTS.columns)
     return LINK_COUNTS.validate(volume[columns].reset_index(drop=True)), report

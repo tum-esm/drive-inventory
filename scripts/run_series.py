@@ -3,7 +3,7 @@
 Usage: uv run python scripts/run_series.py [configs/munich_2025.yaml]
 
 Uses v1's choice of traffic model per year until Q14 is decided: 2018-2024 on the 2019 model, 2025
-on the 2025 model. Each model has its own counts period, reference year and completeness window,
+on the 2025 model. Each model has its own counts period and reference year,
 the settings of v1's two counting files (Q22). Results go to <paths.results>/series.
 """
 
@@ -29,7 +29,6 @@ def series_config(config: DriveConfig, year: int) -> DriveConfig:
     config.run.reference_year = reference_year
     config.run.start, config.run.end = date(year, 1, 1), date(year, 12, 31)
     config.counts_qa.period_start = settings['period_start']
-    config.counts_qa.completeness_window = (date(reference_year, 1, 1), date(reference_year, 12, 31))
     config.paths.results = config.paths.results / 'series'
     return config
 

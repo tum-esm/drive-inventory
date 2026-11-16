@@ -70,21 +70,26 @@ def share_corrections(links: pd.DataFrame,
                       vehicle_shares: pd.Series,
                       day_types: pd.Series,
                       reference_year: int,
-                      reference_day_type: int = 0) -> pd.DataFrame:
+                      reference_day_type: int = 0,
+                      classes: tuple[str, ...] = ('HGV',)) -> pd.DataFrame:
     """Link-level correction of the HGV and LCV shares: the model's share over the counted share.
 
     The counted share is the mean over the reference days of the reference year, per scaling
-    road type.
+    road type. Only `classes` are corrected; the others get 1, so the link keeps the counted share
+    of its scaling road type. LCV is not corrected by default: the model's LCV shares are 1.4-1.9
+    times the counted ones on every road type and don't follow their spatial pattern (spec D25,
+    docs/vehicle_classes_README.md). v1 corrected HGV and LCV.
 
     Returns:
         pd.DataFrame: hgv_corr and lcv_corr, index as `links`
     """
     mean_shares = reference_shares(vehicle_shares, day_types, reference_year, reference_day_type)
     road_types = links['scaling_road_type']
-    return pd.DataFrame({
-        'hgv_corr': links['dtv_HGV'] / links['dtv_SUM'] / road_types.map(mean_shares.loc['HGV']),
-        'lcv_corr': links['dtv_LCV'] / links['dtv_SUM'] / road_types.map(mean_shares.loc['LCV']),
-    })
+    corrections = pd.DataFrame(1.0, index=links.index, columns=['hgv_corr', 'lcv_corr'])
+    for vehicle_class in classes:
+        corrections[f'{vehicle_class.lower()}_corr'] = \
+            links[f'dtv_{vehicle_class}'] / links['dtv_SUM'] / road_types.map(mean_shares.loc[vehicle_class])
+    return corrections
 
 
 def daily_volumes(dtv_day: np.ndarray,

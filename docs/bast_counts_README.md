@@ -121,7 +121,7 @@ KFZ flags in the Munich files, both directions, 2018: `-` 365,379, `s` 72,396, `
 | Step | Rule |
 |---|---|
 | Detector | `Zst` + `1` or `2` (direction), as in v1 |
-| Classes | SUM = `KFZ`; PC = `Pkw` + `PmA`; LCV = `Lfw`; HGV = `LoA` + `Lzg`; BUS = `Bus`; MOT = `Mot` (v1). `PLZ`, `Sat` and `Son` are not used |
+| Classes | SUM = `KFZ`; PC = `Pkw` + `PmA`; LCV = `Lfw`; HGV = `LoA` + `Lzg`; BUS = `Bus`; MOT = `Mot` (v1). `PLZ`, `Sat` and `Son` are not used. How reliable `Lfw` is: [vehicle_classes_README.md](vehicle_classes_README.md) |
 | Hours | `Stunde` 01–24 → `h00`–`h23` |
 | Daily value | sum of the hours (v1) |
 | Negative values | −1 (flag `x`) read as missing; v1's preprocessed file had −1 |

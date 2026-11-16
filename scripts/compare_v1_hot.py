@@ -5,7 +5,7 @@ Usage: uv run python scripts/compare_v1_hot.py [configs/munich_2025.yaml]
 1. Kernel on v1's inputs (pass/fail): Activity comes from v1's combined counts file with v1's day types
    (scripts/v1_inputs.py; identical to v1 TrafficCounts, see compare_v1_counts.py), and the links with their
    share corrections come from the baseline. Every link and column must match within the tolerance. The
-   kernel's own share corrections are compared with the baseline's as a separate check.
+   kernel's own share corrections (with v1's LCV correction, D25) are compared with the baseline's as a separate check.
    The hourly profile with v1's definition must match v1's hourly worker on sample days.
 2. Full chain from the store (reported): totals per component, vehicle class and road type in % of the
    baseline. v2 differs on purpose: VG250 clip area (R23), counts from the raw ingests, store calendar (D22).
@@ -62,7 +62,7 @@ def check_kernel(config, params, baseline: pd.DataFrame) -> bool:
     dates = pd.date_range(f'{YEAR}-01-01', f'{YEAR}-12-31')
 
     own = share_corrections(baseline, activity.vehicle_shares, day_types, config.run.reference_year,
-                            config.run.reference_day_type)
+                            config.run.reference_day_type, classes=('HGV', 'LCV'))  # v1 corrected LCV too (D25)
     corrections_ok = True
     for column in own.columns:
         ok = np.isclose(own[column], baseline[column], rtol=RTOL, atol=ATOL, equal_nan=True)

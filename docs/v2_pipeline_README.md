@@ -164,7 +164,7 @@ Known caveat: in 2018 most city detectors only report from December. The 2018 sc
 
 | What | How |
 |---|---|
-| Kernel, scaling, vehicle split, pooling, counts QA, gridding, output units, store versions | `uv run pytest`, known-answer tests on invented data (`tests/`), also in CI |
+| Kernel, scaling, vehicle split, pooling, counts QA, overrides, BASt reader, time zones, calendar, gridding, output units, store versions | `uv run pytest`, known-answer tests on invented data (`tests/`), also in CI |
 | Code | `uv run ruff check`, `uv run pyright`, also in CI |
 | Results against v1 | `scripts/compare_v1_*.py` on the real data, against the baselines in `data/inventory/baselines/`; local only. They stay exact on v1's own inputs and report the differences of the v2 chain |
 | Counted vs modelled shares per counted link | `scripts/check_link_shares.py [config] [scaling road type]` |

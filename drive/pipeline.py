@@ -4,13 +4,20 @@ import time
 from dataclasses import dataclass
 
 import geopandas as gpd
+import numpy as np
 import pandas as pd
 
 from drive import store
 from drive.config import DriveConfig
 from drive.domain.activity import Activity
 from drive.domain.calendar import DAY_GROUPS, OUTLIER_GROUPS, calendar_day_types
-from drive.domain.cold_start import StartsReport, distribute_starts, hourly_cold_emissions, link_cold_emissions
+from drive.domain.cold_start import (
+    StartsReport,
+    distribute_starts,
+    hourly_cold_emissions,
+    link_cold_emissions,
+    start_patterns,
+)
 from drive.domain.counts_qa import QAParams, QAReport, link_attributes, link_volumes, qa_link_counts
 from drive.domain.kernel import (
     EfTable,
@@ -46,18 +53,25 @@ def kernel_params(config: DriveConfig) -> KernelParams:
 
 
 def load_hot_factors(config: DriveConfig, year: int, version: int) -> pd.DataFrame:
-    """Hot emission factors of one year for the run's mode, ambient pattern and area type."""
+    """Hot emission factors of one year for the run's mode, ambient pattern(s) and area type.
+
+    With `run.hot_ambient: hourly_temperature` all ambient patterns of the table are kept (R33, D32);
+    with `fixed`, only `run.hot_ambient_pattern`.
+    """
     run, _ = _require(config)
-    if run.hbefa_version is None or run.hot_ambient_pattern is None:
-        raise ValueError('The config needs run.hbefa_version and run.hot_ambient_pattern')
+    if run.hbefa_version is None:
+        raise ValueError('The config needs run.hbefa_version')
+    if run.hot_ambient == 'fixed' and run.hot_ambient_pattern is None:
+        raise ValueError('run.hot_ambient: fixed needs run.hot_ambient_pattern')
     aggregation = 'aggregate_ts' if run.hot_mode == 'aggregated' else 'single_ts'
     factors = store.read_emission_factors(config.paths.store, run.hbefa_version, year, 'hot', aggregation,
                                           run.components, version)
-    selected = factors[factors['ambient_pattern'] == run.hot_ambient_pattern]
+    selected = factors[factors['ambient_pattern'] == run.hot_ambient_pattern] if run.hot_ambient == 'fixed' \
+        else factors
     if run.hot_mode == 'aggregated':
         selected = selected[selected['road_category'] == run.area_type]
     if selected.empty:
-        raise ValueError(f'No {year} hot factors with the ambient pattern {run.hot_ambient_pattern}')
+        raise ValueError(f'No {year} hot factors for ambient {run.hot_ambient} {run.hot_ambient_pattern or ""}')
     return selected
 
 
@@ -198,6 +212,8 @@ class HotRun:
     report: QAReport
     seconds: dict[str, float]  # wall time per stage
     activity: Activity
+    temperature: TemperatureReport | None = None  # with run.hot_ambient: hourly_temperature
+    pattern_hours: dict[str, int] | None = None  # ambient pattern -> hours of the run
 
 
 def load_clip_boundary(config: DriveConfig, version: int | None = None) -> gpd.GeoDataFrame | None:
@@ -254,10 +270,24 @@ def compute_hot_emissions(config: DriveConfig) -> HotRun:
 
     start = time.perf_counter()
     dates = pd.date_range(run.start, run.end)
+    pattern_of_hour, temperature_report, pattern_hours = None, None, None
+    if run.hot_ambient == 'hourly_temperature':
+        hours = pd.date_range(dates[0], periods=len(dates) * 24, freq='1h')
+        temperature, temperature_report = load_temperature(config, hours, version)
+        patterns = start_patterns(temperature.to_numpy())  # nearest 5 K bin, as for cold starts
+        missing = sorted(set(patterns) - set(ef.patterns))
+        if missing:
+            raise ValueError(f'The hot factor table lacks the ambient patterns {missing}')
+        pattern_of_hour = np.array([ef.patterns.index(p) for p in patterns])
+        pattern_hours = {str(k): int(v) for k, v in pd.Series(patterns).value_counts().sort_index().items()}
+    seconds['temperature'] = time.perf_counter() - start
+
+    start = time.perf_counter()
     hot = hot_emissions(links, corrections, activity, dates, ef, params,
-                        profile_weights={'length_km': links.length.to_numpy() / 1000})
+                        profile_weights={'length_km': links.length.to_numpy() / 1000}, pattern_of_hour=pattern_of_hour)
     seconds['kernel'] = time.perf_counter() - start
-    return HotRun(links, corrections, hot, ef, dates, version, report, seconds, activity)
+    return HotRun(links, corrections, hot, ef, dates, version, report, seconds, activity, temperature_report,
+                  pattern_hours)
 
 
 def hot_profile(run: HotRun, config: DriveConfig) -> pd.DataFrame:
@@ -364,6 +394,10 @@ def run_inventory(config: DriveConfig) -> list[str]:
     timing = ', '.join(f'{stage} {value:.1f} s' for stage, value in hot.seconds.items())
     log += [f'{results / f"hot_{stem}{mode}.parquet"}: {len(table)} rows, store batch {hot.version}',
             f'Time: {timing}; links with the HGV cap (k < 0 without it, D27): {hot.hot.capped_links}']
+    if hot.pattern_hours is not None and hot.temperature is not None:
+        log.append(f'Hot ambient patterns by hourly temperature (D32), hours per pattern: {hot.pattern_hours}; '
+                   f'temperature hours from the backup station {hot.temperature.from_backup}, '
+                   f'interpolated {hot.temperature.interpolated}')
     outliers = hot.report.share_outliers
     if outliers is not None:
         removed = ', '.join(f'{c} {len(g)} link-years on {g["road_link_id"].nunique()} links'

@@ -6,8 +6,10 @@ day by day, and applies the emission factors once at the end. Hourly profiles wo
 links with the same road type, speed and gradient share their factors, so volume is summed per
 such group before the factors are applied.
 
-Behaviour kept from v1 for comparability (spec §5):
-- the hot ambient pattern is fixed (R33 in the backlog)
+Ambient pattern (R33, D32): HBEFA's hot NOx and NO2 of PC and LCV depend on the ambient temperature
+(about 1.5 times the 25 °C value at 0 °C and below). The factor table holds one or several ambient
+patterns; `hot_emissions` gets the pattern of every hour and sums the volume per pattern. With one
+pattern (v1: always T+25°C) the result is that of v1.
 Deliberate change (spec D27, R45): corrected HGV is capped at the link's total and the other classes at
 zero, so no volume is negative; v1 let `k` go negative (`KernelParams.cap_shares = False`).
 """
@@ -42,10 +44,11 @@ class KernelParams:
 @dataclass(frozen=True)
 class EfTable:
     """Emission factors of the links of a run, stored once per group of links that share them."""
-    by_group: np.ndarray  # [group, LOS, vehicle class, component]
+    by_group: np.ndarray  # [ambient pattern, group, LOS, vehicle class, component]
     group_of_link: np.ndarray  # group per link
     road_type_of_group: np.ndarray  # position in `road_types` per group
     road_types: list[str]
+    patterns: list[str]  # ambient pattern per position of the first axis of by_group
 
 
 @dataclass
@@ -153,22 +156,26 @@ def traffic_situation(area_type: str, road_type: str, speed: int, los: int) -> s
     return f'{_AREA_PREFIX[area_type]}/{_ROAD_TYPE_NAMES[road_type]}/{speed}/{SERVICE_CLASSES[los]}'
 
 
+def _patterns(factors: pd.DataFrame) -> tuple[list[str], list[pd.DataFrame]]:
+    """The ambient patterns of a factor table (one unnamed pattern if it has no such column) and their rows."""
+    if 'ambient_pattern' not in factors:
+        return [''], [factors]
+    patterns = sorted(factors['ambient_pattern'].unique())
+    return patterns, [factors[factors['ambient_pattern'] == p] for p in patterns]
+
+
 def build_ef_table(links: pd.DataFrame, factors: pd.DataFrame, params: KernelParams) -> EfTable:
-    """Emission factors of all links, LOS classes, vehicle classes and components.
+    """Emission factors of all links, LOS classes, vehicle classes and components, per ambient pattern.
 
     Args:
         links: road_type, hbefa_speed, hbefa_gradient per link
-        factors: vehicle_class, traffic_situation, gradient, pollutant, efa of one ambient pattern
+        factors: vehicle_class, traffic_situation, gradient, pollutant, efa, and ambient_pattern if
+            it holds several patterns
 
     Raises:
         ValueError: if a factor key has several rows, or a link needs a factor that doesn't exist
     """
     key = ['traffic_situation', 'vehicle_class', 'gradient', 'pollutant']
-    duplicates = factors.duplicated(key)
-    if duplicates.any():
-        raise ValueError(f'{duplicates.sum()} rows repeat a factor key, e.g.\n{factors.loc[duplicates, key].head(3)}')
-    efa = factors.set_index(key)['efa']
-
     attributes = ['road_type', 'hbefa_speed', 'hbefa_gradient']
     groups = links[attributes].drop_duplicates().reset_index(drop=True)
     wanted = pd.MultiIndex.from_tuples(
@@ -177,16 +184,23 @@ def build_ef_table(links: pd.DataFrame, factors: pd.DataFrame, params: KernelPar
          for los in range(N_LOS)
          for vehicle in params.vehicle_classes
          for component in params.components], names=key)
-    values = efa.reindex(wanted)
-    if values.isna().any():
-        missing = values.index[values.isna()]
-        raise ValueError(f'No emission factor for {len(missing)} keys, e.g. {list(missing[:3])}')
-
     shape = (len(groups), N_LOS, len(params.vehicle_classes), len(params.components))
-    by_group = values.to_numpy().reshape(shape)
+
+    patterns, tables = _patterns(factors)
+    arrays = []
+    for pattern, table in zip(patterns, tables):
+        duplicates = table.duplicated(key)
+        if duplicates.any():
+            raise ValueError(f'{duplicates.sum()} rows repeat a factor key, e.g.\n{table.loc[duplicates, key].head(3)}')
+        values = table.set_index(key)['efa'].reindex(wanted)
+        if values.isna().any():
+            missing = values.index[values.isna()]
+            raise ValueError(f'No emission factor for {len(missing)} keys ({pattern}), e.g. {list(missing[:3])}')
+        arrays.append(values.to_numpy().reshape(shape))
+
     group_of_link = links[attributes].merge(groups.assign(_group=range(len(groups))), on=attributes, how='left')
     codes, road_types = pd.factorize(groups['road_type'])
-    return EfTable(by_group, group_of_link['_group'].to_numpy(), codes, list(road_types))
+    return EfTable(np.stack(arrays), group_of_link['_group'].to_numpy(), codes, list(road_types), patterns)
 
 
 def build_aggregated_ef_table(links: pd.DataFrame, factors: pd.DataFrame, params: KernelParams) -> EfTable:
@@ -197,25 +211,27 @@ def build_aggregated_ef_table(links: pd.DataFrame, factors: pd.DataFrame, params
 
     Args:
         links: road_type per link
-        factors: vehicle_class, pollutant, efa of one road category and ambient pattern
+        factors: vehicle_class, pollutant, efa of one road category, and ambient_pattern if it holds several
 
     Raises:
         ValueError: if a factor key has several rows, or a factor doesn't exist
     """
     key = ['vehicle_class', 'pollutant']
-    duplicates = factors.duplicated(key)
-    if duplicates.any():
-        raise ValueError(f'{duplicates.sum()} rows repeat a factor key, e.g.\n{factors.loc[duplicates, key].head(3)}')
     wanted = pd.MultiIndex.from_product([params.vehicle_classes, params.components], names=key)
-    values = factors.set_index(key)['efa'].reindex(wanted)
-    if values.isna().any():
-        missing = values.index[values.isna()]
-        raise ValueError(f'No emission factor for {len(missing)} keys, e.g. {list(missing[:3])}')
-
     group_of_link, road_types = pd.factorize(links['road_type'])
-    matrix = values.to_numpy().reshape(len(params.vehicle_classes), len(params.components))
-    by_group = np.broadcast_to(matrix, (len(road_types), N_LOS) + matrix.shape).copy()
-    return EfTable(by_group, group_of_link, np.arange(len(road_types)), list(road_types))
+    patterns, tables = _patterns(factors)
+    arrays = []
+    for pattern, table in zip(patterns, tables):
+        duplicates = table.duplicated(key)
+        if duplicates.any():
+            raise ValueError(f'{duplicates.sum()} rows repeat a factor key, e.g.\n{table.loc[duplicates, key].head(3)}')
+        values = table.set_index(key)['efa'].reindex(wanted)
+        if values.isna().any():
+            missing = values.index[values.isna()]
+            raise ValueError(f'No emission factor for {len(missing)} keys ({pattern}), e.g. {list(missing[:3])}')
+        matrix = values.to_numpy().reshape(len(params.vehicle_classes), len(params.components))
+        arrays.append(np.broadcast_to(matrix, (len(road_types), N_LOS) + matrix.shape).copy())
+    return EfTable(np.stack(arrays), group_of_link, np.arange(len(road_types)), list(road_types), patterns)
 
 
 def _day_inputs(activity: Activity,
@@ -244,7 +260,8 @@ def hot_emissions(links: pd.DataFrame,
                   dates: pd.DatetimeIndex,
                   ef: EfTable,
                   params: KernelParams,
-                  profile_weights: dict[str, np.ndarray] | None = None) -> HotEmissions:
+                  profile_weights: dict[str, np.ndarray] | None = None,
+                  pattern_of_hour: np.ndarray | None = None) -> HotEmissions:
     """Hot emissions per link over the given dates.
 
     Args:
@@ -254,6 +271,8 @@ def hot_emissions(links: pd.DataFrame,
         ef: see build_ef_table (level-of-service specific) or build_aggregated_ef_table, for the same links
         profile_weights: name -> weight per link. Each gives an hourly profile, the sum of
             g/km x weight per road type. Link length in km gives emissions in g.
+        pattern_of_hour: position in `ef.patterns` of every hour of `dates` (24 per day, local wall
+            clock). None: the table must hold one pattern, used for every hour
 
     Returns:
         HotEmissions, in g/km per link
@@ -271,9 +290,18 @@ def hot_emissions(links: pd.DataFrame,
     car_units = np.array([params.car_unit_factors[v] for v in vehicles])
     link_offset = np.arange(n)[:, None] * N_LOS
 
-    annual = np.zeros((n * N_LOS, len(vehicles)))
+    n_patterns = len(ef.patterns)
+    if pattern_of_hour is None:
+        if n_patterns != 1:
+            raise ValueError(f'The factor table holds {n_patterns} ambient patterns, so pattern_of_hour is needed')
+        pattern_of_hour = np.zeros(len(dates) * 24, dtype=int)
+    pattern_of_hour = np.asarray(pattern_of_hour, dtype=int)
+    if pattern_of_hour.shape != (len(dates) * 24,):
+        raise ValueError(f'pattern_of_hour has {len(pattern_of_hour)} hours, the dates {len(dates) * 24}')
+
+    annual = np.zeros((n_patterns * n * N_LOS, len(vehicles)))
     capped = np.zeros(n, dtype=bool)
-    n_groups = len(ef.by_group)
+    n_groups = ef.by_group.shape[1]
     group_offset = ef.group_of_link[:, None] * N_LOS
     hour_offset = np.arange(24)[None, :] * n_groups * N_LOS
     n_cells = 24 * n_groups * N_LOS
@@ -287,21 +315,29 @@ def hot_emissions(links: pd.DataFrame,
         capped |= capped_links(shares[road_type_codes], hgv_corr, lcv_corr, vehicles)
         hourly = day[:, None, :] * cycle[None, :, :]
         los = los_classes(hourly @ car_units, capacity, thresholds)
-        positions = (link_offset + los).ravel()
+        day_patterns = pattern_of_hour[d * 24:(d + 1) * 24]
+        positions = (day_patterns[None, :] * n * N_LOS + link_offset + los).ravel()
         cells = (group_offset + los + hour_offset).ravel()
         for v in range(len(vehicles)):
-            annual[:, v] += np.bincount(positions, weights=hourly[:, :, v].ravel(), minlength=n * N_LOS)
+            annual[:, v] += np.bincount(positions, weights=hourly[:, :, v].ravel(), minlength=len(annual))
         for name, weight in profile_weights.items():
             weighted = hourly * weight[:, None, None]
             cell_volume = np.stack([np.bincount(cells, weights=weighted[:, :, v].ravel(), minlength=n_cells)
                                     for v in range(len(vehicles))], axis=-1)
             cell_volume = cell_volume.reshape(24, n_groups, N_LOS, len(vehicles))
-            by_group = np.einsum('hgsv,gsvc->hgvc', cell_volume, ef.by_group)
+            by_group = np.zeros((24, n_groups, len(vehicles), len(params.components)))
+            for p in np.unique(day_patterns):
+                hours = day_patterns == p
+                by_group[hours] = np.einsum('hgsv,gsvc->hgvc', cell_volume[hours], ef.by_group[p])
             for r in range(len(ef.road_types)):
                 profiles[name][d * 24:(d + 1) * 24, r] = by_group[:, ef.road_type_of_group == r].sum(axis=1)
 
-    volume = annual.reshape(n, N_LOS, len(vehicles))
-    emissions = np.einsum('lsv,lsvc->lvc', volume, ef.by_group[ef.group_of_link])
+    per_pattern = annual.reshape(n_patterns, n, N_LOS, len(vehicles))
+    emissions = np.zeros((n, len(vehicles), len(params.components)))
+    for p in range(n_patterns):
+        if per_pattern[p].any():
+            emissions += np.einsum('lsv,lsvc->lvc', per_pattern[p], ef.by_group[p][ef.group_of_link])
+    volume = per_pattern.sum(axis=0)
     columns = [f'{v}_{c}' for v in vehicles for c in params.components]
     return HotEmissions(emissions=pd.DataFrame(emissions.reshape(n, -1), index=links.index, columns=columns),
                         annual_volume=volume,

@@ -151,7 +151,9 @@ class RunConfig(_Strict):
     hbefa_version: int | None = None  # the emission factors a run reads from the store
     vehicle_classes: list[str] = []
     components: list[str] = []
-    hot_ambient_pattern: str | None = None  # the HBEFA pattern of the hot factors (R33: fixed for now)
+    # hot factors: the ambient pattern of each hour's temperature (R33, D32), or one fixed pattern (v1: T+25°C)
+    hot_ambient: Literal['hourly_temperature', 'fixed'] = 'fixed'
+    hot_ambient_pattern: str | None = None  # the pattern with hot_ambient: fixed
     hot_mode: Literal['los_specific', 'aggregated'] = 'los_specific'  # traffic situation per link and hour, or one mean
     area_type: Literal['Urban', 'Motorway', 'Rural'] = 'Urban'
     temperature: TemperatureConfig | None = None  # needed for cold starts

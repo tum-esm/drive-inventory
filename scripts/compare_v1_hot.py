@@ -10,7 +10,8 @@ Usage: uv run python scripts/compare_v1_hot.py [configs/munich_2025.yaml]
 2. Full chain from the store (reported): totals per component, vehicle class and road type in % of the
    baseline. v2 differs on purpose: VG250 clip area (R23), counts from the raw ingests, store calendar (D22),
    counted LCV shares without lcv_corr (D25),
-   HGV capped at the link total (D27; the checks on v1's inputs run without the cap).
+   HGV capped at the link total (D27; the checks on v1's inputs run without the cap). The script runs with
+   v1's fixed T+25°C hot factors; the hourly temperature patterns (D32) are not part of this comparison.
    Until those switches the chain matched the baseline row by row within 0.01 % (commit 6cd20b5).
 3. Aggregated mode: the kernel on v1's inputs against v1's aggregated line source (pass/fail), and the chain
    from the store (reported). It doesn't use gradients, so the v1.1-asis file is still valid.
@@ -217,6 +218,8 @@ def check_aggregated(config, params) -> bool:
 
 def main(config_path: str = 'configs/munich_2025.yaml') -> int:
     config = load_config(config_path)
+    # v1 always used the T+25°C factors (R33); the hourly temperature patterns (D32) are compared in the series
+    config.run.hot_ambient, config.run.hot_ambient_pattern = 'fixed', 'T+25°C,tØ,dØ'
     params = replace(kernel_params(config), cap_shares=False)  # v1 let k go negative (D27)
     baseline = gpd.read_file(config.paths.data_root / BASELINE)
 

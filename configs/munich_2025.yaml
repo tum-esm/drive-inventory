@@ -131,7 +131,9 @@ run:
   hbefa_version: 501007
   vehicle_classes: [PC, LCV, HGV, BUS, MOT]
   components: [CO, NOx, NO2, CO2(rep), CO2(total), PM10-ex, CH4, PM10-nx, PM2.5-ex, BC-ex, PM2.5-nx, BC-nx]
-  hot_ambient_pattern: T+25°C,tØ,dØ    # v1 behaviour, R33 will select it by temperature
+  # hot factors: the HBEFA ambient pattern of each hour's temperature (nearest 5 K bin, run.temperature; spec R33, D32).
+  # Only NOx and NO2 of PC and LCV depend on it. `fixed` with hot_ambient_pattern T+25°C,tØ,dØ reproduces v1
+  hot_ambient: hourly_temperature
   area_type: Urban
   hot_mode: los_specific               # or aggregated: one mean factor (tables for 2024 and 2025 only)
   clip_ags: '09162000'                 # München, VG250 land area

@@ -130,3 +130,39 @@ def test_daily_volumes_cap_hgv_at_the_total():
 
     assert dict(zip(vehicles, capped[0])) == pytest.approx({'PC': 0.0, 'LCV': 50.0, 'HGV': 950.0})
     assert v1[0, 0] < 0 and v1.sum() == pytest.approx(1000.0)
+
+
+def test_hourly_ambient_pattern_selects_the_factors_of_each_hour():
+    """The link of the hand calculation above, with two ambient patterns (R33, D32).
+
+    'cold' has twice the factors of 'warm' and applies to hours 0-7, 'warm' to hours 8-23. Of the
+    traffic hours only h07 (25 %, Freeflow) is cold:
+        PC CO2 = 1200 x (0.25 x 1 x 2 + 0.375 x 4 + 0.375 x 1) = 2850 g/km   (all warm: 2550)
+    Catches a pattern that is ignored, taken for the wrong hours, or a profile built with the wrong one.
+    """
+    links = pd.DataFrame({'dtv_SUM': [800.0], 'scaling_road_type': [ROAD], 'road_type': [ROAD],
+                          'hbefa_speed': [50], 'hbefa_gradient': ['0%'], 'hour_capacity': [900]})
+    corrections = pd.DataFrame({'hgv_corr': [1.0], 'lcv_corr': [1.0]})
+    params = KernelParams(vehicle_classes=VEHICLES, components=COMPONENTS,
+                          car_unit_factors={'PC': 1.0, 'LCV': 1.0, 'HGV': 2.0},
+                          vcr_thresholds={ROAD: (0.5, 0.7, 0.9, 1.0)})
+    factors = pd.DataFrame([{'traffic_situation': f'URB/Distr/50/{los}', 'vehicle_class': vehicle, 'gradient': '0%',
+                             'pollutant': component, 'ambient_pattern': pattern,
+                             'efa': los_factor * vehicle_factor * component_factor * scale}
+                            for pattern, scale in {'cold': 2.0, 'warm': 1.0}.items()
+                            for los, los_factor in LOS_FACTOR.items()
+                            for vehicle, vehicle_factor in VEHICLE_FACTOR.items()
+                            for component, component_factor in COMPONENT_FACTOR.items()])
+    dates = pd.date_range('2025-01-07', periods=1)
+    ef = build_ef_table(links, factors, params)
+    hours = np.where(np.arange(24) < 8, ef.patterns.index('cold'), ef.patterns.index('warm'))
+
+    result = hot_emissions(links, corrections, OneDayActivity(), dates, ef, params,
+                           profile_weights={'length_km': np.array([1.0])}, pattern_of_hour=hours)
+
+    assert result.emissions.loc[0, 'PC_CO2'] == pytest.approx(2850.0)
+    assert result.emissions.loc[0, 'HGV_NOx'] == pytest.approx(200 * 2.375 * 10 * 0.5)
+    profile = profile_frame(result.profiles['length_km'], dates, ef, params)
+    pc_co2 = profile[(profile['vehicle_class'] == 'PC') & (profile['component'] == 'CO2')]
+    assert pc_co2['emission'].sum() == pytest.approx(2850.0)
+    assert pc_co2.loc[pc_co2['time'].dt.hour == 7, 'emission'].sum() == pytest.approx(1200 * 0.25 * 2)

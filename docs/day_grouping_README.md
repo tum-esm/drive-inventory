@@ -82,7 +82,7 @@ The ingest writes a new batch only if the generated calendar differs from the la
 
 ## Differences from v1
 
-v1 read its day types from `data/auxiliary/calender_18to26.xlsx`. It had a separate class for vacation weekdays and gap days, with its own hourly profile and outlier group. The workbook now serves only for comparisons. The comparison scripts set `run.calendar_source: v1_workbook`, which restores v1's day types and groups.
+v1 read its day types from `data/auxiliary/calender_18to26.xlsx`. It had a separate class for vacation weekdays and gap days, with its own hourly profile and outlier group. `drive` no longer reads the workbook. The comparison scripts load it themselves (`scripts/v1_inputs.py`) to rebuild v1's day types.
 
 The workbook differs from the store on 25 of 3,287 days from 2018 to 2026, and `compare_v1_calendar.py` fails on any other difference:
 

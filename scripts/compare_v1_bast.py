@@ -3,7 +3,7 @@
 Usage: uv run python scripts/compare_v1_bast.py [configs/munich_2025.yaml]
 
 Reads v1's merged station tables (BAST_CountingStations_daily_2018.csv, BAST_TrafficCounts_raw.csv) and
-compares every detector, day and class with the interim ingest of v1's preprocessed file. Expected:
+compares every detector, day and class with v1's preprocessed file (BAST_TrafficCounts_preprocessed_from2018.parquet). Expected:
 hours without a row are missing here and 0 in v1 (same link sums). Every other difference is listed.
 """
 
@@ -13,24 +13,21 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from drive import store
 from drive.config import load_config
 from drive.io import bast
+from drive.io.counts_preprocessed import read_preprocessed_counts
 from drive.schemas import COUNT_KEY, HOURS
 
 FILES = ['BAST_CountingStations_daily_2018.csv', 'BAST_TrafficCounts_raw.csv']
 FOLDER = Path('restricted_input/counting_data/bast')
+V1_FILE = 'BAST_TrafficCounts_preprocessed_from2018.parquet'
 
 
 def main(config_path: str = 'configs/munich_2025.yaml') -> int:
     config = load_config(config_path)
-    batches = store.read_batches(config.paths.store)
-    interim = batches[(batches['kind'] == 'counts') & (batches['source'] == 'BASt') & (batches['params'] != '{}')]
-    version = int(interim['batch_id'].max())
-    v1 = store.read_counts(config.paths.store, version)
-    v1 = v1[v1['source'] == 'BASt'].drop(columns=['batch_id', 'flags'], errors='ignore')
-    v1['date'] = v1['date'].astype('datetime64[us]')
-    print(f'v1 preprocessed (batch {version}): {len(v1)} rows, {v1["detector_id"].nunique()} detectors, '
+    v1, _, _ = read_preprocessed_counts(config.paths.data_root / FOLDER / V1_FILE, 'BASt', {})
+    v1 = v1.drop(columns='flags')
+    print(f'v1 preprocessed: {len(v1)} rows, {v1["detector_id"].nunique()} detectors, '
           f'{v1["date"].min().date()} to {v1["date"].max().date()}')
 
     parts = []

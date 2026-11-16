@@ -4,8 +4,6 @@
 paths:
   data_root: ../data
   store: restricted_input/drive.duckdb
-  calendar: auxiliary/calender_18to26.xlsx   # v1's workbook, only read for comparisons with v1
-  clip_boundary: geodata/munich_boarders.gpkg   # v1's boundary, only read with run.clip_source: v1_file
   results: inventory/v2
 
 # VISUM models: raw exports; counter -> link matchings are stored per model for links that exist in it

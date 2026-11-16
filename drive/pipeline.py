@@ -9,7 +9,7 @@ import pandas as pd
 from drive import store
 from drive.config import DriveConfig
 from drive.domain.activity import Activity
-from drive.domain.calendar import DAY_GROUPS, OUTLIER_GROUPS, calendar_day_types, combined_day_types
+from drive.domain.calendar import DAY_GROUPS, OUTLIER_GROUPS, calendar_day_types
 from drive.domain.cold_start import StartsReport, distribute_starts, hourly_cold_emissions, link_cold_emissions
 from drive.domain.counts_qa import QAParams, QAReport, link_attributes, link_volumes, qa_link_counts
 from drive.domain.kernel import (
@@ -26,7 +26,6 @@ from drive.domain.kernel import (
 )
 from drive.domain.meteo import TemperatureReport, combine_stations, station_series, to_local_hourly
 from drive.io.boundaries import LAND
-from drive.io.calendar_excel import read_calendar
 
 
 def _require(config: DriveConfig):
@@ -74,8 +73,6 @@ def load_day_types(config: DriveConfig, version: int | None = None) -> pd.Series
     run, qa = _require(config)
     first = min(qa.period_start, run.start or qa.period_start).year
     last = max(qa.period_end, run.end or qa.period_end).year
-    if run.calendar_source == 'v1_workbook':
-        return combined_day_types(read_calendar(config.paths.calendar, list(range(first, last + 1))))
 
     c = config.ingest.calendar
     if c is None:
@@ -115,12 +112,6 @@ def load_temperature(config: DriveConfig,
     return temperature, TemperatureReport(from_backup=from_backup, interpolated=interpolated)
 
 
-def _day_groups(config: DriveConfig) -> dict[int, int] | None:
-    """Groups of the day types; v1's day types are their own groups."""
-    run, _ = _require(config)
-    return DAY_GROUPS if run.calendar_source == 'store' else None
-
-
 def load_link_counts(config: DriveConfig) -> tuple[pd.DataFrame, QAReport, int]:
     """Quality-controlled link counts (LINK_COUNTS) of the run's traffic model.
 
@@ -145,7 +136,7 @@ def load_link_counts(config: DriveConfig) -> tuple[pd.DataFrame, QAReport, int]:
                       completeness_threshold=qa.completeness_threshold,
                       iqr_range=qa.iqr_range,
                       scaling_road_types=config.scaling_road_types,
-                      outlier_groups=OUTLIER_GROUPS if run.calendar_source == 'store' else None)
+                      outlier_groups=OUTLIER_GROUPS)
 
     raw['date'] = raw['date'].astype('datetime64[us]')
     volume = link_volumes(raw, links, attributes, load_day_types(config, version))
@@ -162,7 +153,7 @@ def load_activity(config: DriveConfig) -> tuple[Activity, QAReport, int]:
     run, _ = _require(config)
     link_counts, report, version = load_link_counts(config)
     activity = Activity(link_counts, load_day_types(config, version), run.reference_year, run.reference_day_type,
-                        _day_groups(config))
+                        DAY_GROUPS)
     return activity, report, version
 
 
@@ -197,16 +188,12 @@ class HotRun:
 
 
 def load_clip_boundary(config: DriveConfig, version: int | None = None) -> gpd.GeoDataFrame | None:
-    """The run's clip area: VG250 land area of run.clip_ags from the store, or v1's file; None = no clipping.
+    """The run's clip area: VG250 land area of run.clip_ags from the store; None = no clipping.
 
     Args:
         version: store batch id to read at, None = run.data_version
     """
     run, _ = _require(config)
-    if run.clip_source == 'v1_file':
-        if config.paths.clip_boundary is None:
-            raise ValueError('run.clip_source v1_file needs paths.clip_boundary')
-        return gpd.read_file(config.paths.clip_boundary)
     if run.clip_ags is None:
         return None
     return store.read_boundary(config.paths.store, run.clip_ags, gf=LAND,

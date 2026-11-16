@@ -77,7 +77,8 @@ def read_preprocessed_counts(path: str | Path,
         exists = pairs['road_link_id'].isin(link_ids)
         report.links_missing_in_model[model] = sorted(pairs.loc[~exists, 'road_link_id'].unique().tolist())
         links.append(pairs[exists].assign(source=source, traffic_model=model))
-    links = COUNTER_LINKS.validate(
-        pd.concat(links)[['source', 'detector_id', 'traffic_model', 'road_link_id']].reset_index(drop=True))
+    columns = ['source', 'detector_id', 'traffic_model', 'road_link_id']
+    links = COUNTER_LINKS.validate(pd.concat(links)[columns].reset_index(drop=True) if links else
+                                   pd.DataFrame(columns=columns))
 
     return counts, links, report

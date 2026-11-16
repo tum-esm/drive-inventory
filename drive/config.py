@@ -23,8 +23,6 @@ class _Strict(BaseModel):
 class PathsConfig(_Strict):
     data_root: Path
     store: Path = Path('restricted_input/drive.duckdb')
-    calendar: Path = Path('auxiliary/calender_18to26.xlsx')  # v1's workbook, only read for comparisons with v1
-    clip_boundary: Path | None = None  # v1's boundary file, read only with run.clip_source: v1_file
     results: Path = Path('inventory/v2')
 
 
@@ -156,7 +154,6 @@ class RunConfig(_Strict):
     end: date | None = None
     reference_year: int  # normalisation year of the scaling, must match the traffic model year
     reference_day_type: Literal[0] = 0  # normal weekday, the only class that is a subset of its profile group
-    calendar_source: Literal['store', 'v1_workbook'] = 'store'  # v1_workbook: v1's day types, for comparisons with v1
     data_version: int | datetime | None = None  # store batch id or tz-aware timestamp, None = latest
     hbefa_version: int | None = None  # the emission factors a run reads from the store
     vehicle_classes: list[str] = []
@@ -166,7 +163,6 @@ class RunConfig(_Strict):
     area_type: Literal['Urban', 'Motorway', 'Rural'] = 'Urban'
     temperature: TemperatureConfig | None = None  # needed for cold starts
     clip_ags: str | None = None  # region (VG250 land area) the links are clipped to; None = no clipping
-    clip_source: Literal['store', 'v1_file'] = 'store'  # v1_file: paths.clip_boundary, for comparisons with v1
 
 
 class ColdStartConfig(_Strict):
@@ -223,10 +219,7 @@ class DriveConfig(_Strict):
         if self.run is not None and self.run.traffic_model not in self.traffic_models:
             raise ValueError(f'run.traffic_model {self.run.traffic_model} is not in traffic_models')
         self.paths.store = root / self.paths.store
-        self.paths.calendar = root / self.paths.calendar
         self.paths.results = root / self.paths.results
-        if self.paths.clip_boundary is not None:
-            self.paths.clip_boundary = root / self.paths.clip_boundary
         for m in self.traffic_models.values():
             m.links = root / m.links
             m.zones = root / m.zones

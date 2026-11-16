@@ -14,6 +14,7 @@ Usage: uv run python scripts/compare_v1_calendar.py [configs/munich_2025.yaml]
 
 import sys
 from itertools import product
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -32,9 +33,12 @@ from drive.domain.calendar import (
     calendar_day_types,
     classify_days,
 )
-from drive.io.calendar_excel import read_calendar
 from drive.io.calendar_holidays import read_holidays, read_overrides
 from drive.schemas import CALENDAR
+
+sys.path.insert(0, str(Path(__file__).parent))
+from v1_inputs import CALENDAR as V1_CALENDAR
+from v1_inputs import read_calendar
 
 NAMES = {NORM_WEEKDAY: 'normal weekday', WEEKDAY: 'weekday', VACATION_WEEKDAY: 'vacation weekday', SATURDAY: 'Saturday',
          SUNDAY_HOLIDAY: 'Sunday/holiday'}
@@ -96,7 +100,7 @@ def check_rebuild(c, region: str, years: list[int], stored: pd.DataFrame) -> boo
 
 
 def check_workbook(config, years: list[int], stored: pd.DataFrame) -> bool:
-    workbook = read_calendar(config.paths.calendar, years)
+    workbook = read_calendar(config.paths.data_root / V1_CALENDAR, years)
     if not stored['date'].equals(workbook['date']):
         print(f'Different dates: {len(stored)} days in the store, {len(workbook)} in the workbook')
         return False

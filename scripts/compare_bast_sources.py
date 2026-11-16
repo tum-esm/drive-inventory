@@ -2,7 +2,7 @@
 
 Usage: uv run python scripts/compare_bast_sources.py [configs/munich_2025.yaml]
 
-v1's counts (interim batch 2, read here from v1's merged tables with their flags) came from the annual files for 2018-2022 and from v1's own parse of the raw data
+v1's counts (read here from v1's merged tables, which give the same values and keep the flags) came from the annual files for 2018-2022 and from v1's own parse of the raw data
 for 2023 to January 2026. The new counts come from the annual files for every published year and from the raw
 data after that. Per year: which product the new counts come from, how many detector-days and hourly values are
 equal, and whether every difference comes with a changed flag (a revision by BASt). Differences without a
@@ -28,9 +28,8 @@ def main(config_path: str = 'configs/munich_2025.yaml') -> int:
     path = config.paths.store
     batches = store.read_batches(path)
     bast = batches[(batches['kind'] == 'counts') & (batches['source'] == 'BASt')]
-    interim = int(bast.loc[bast['params'].str.contains('traffic_models'), 'batch_id'].max())
     product = {int(b): ('annual' if '"annual"' in p else 'raw') for b, p in zip(bast['batch_id'], bast['params'])
-               if b != interim}
+               if '"product"' in p}
 
     def load(version: int) -> pd.DataFrame:
         counts = store.read_counts(path, version)
@@ -41,8 +40,7 @@ def main(config_path: str = 'configs/munich_2025.yaml') -> int:
     # v1's merged tables give the same values as the interim batch (compare_v1_bast.py) and keep the flags
     old = pd.concat([bast_io.read_station_table(config.paths.data_root / FOLDER / f)[0] for f in V1_FILES])
     new = load(int(batches['batch_id'].max()))
-    still_interim = (new['batch_id'] == interim).sum()
-    new = new[new['batch_id'] != interim]
+    other = ~new['batch_id'].isin(product)
     new['product'] = new['batch_id'].map(product)
 
     merged = old.merge(new, on=COUNT_KEY, how='outer', suffixes=('_v1', '_new'), indicator=True)
@@ -67,8 +65,7 @@ def main(config_path: str = 'configs/munich_2025.yaml') -> int:
             'flags differ': int(flag_changed.sum()),
             'rows differ, flags equal': int((value_diff & ~flag_changed).sum()),
         })
-    print(f'v1 interim batch {interim}; new batches {sorted(product)}; rows still read from the interim batch: '
-          f'{still_interim}')
+    print(f'BASt batches read: {sorted(new["batch_id"].unique())}; rows from batches of other ingests: {other.sum()}')
     print(pd.DataFrame(rows).to_string(index=False))
     return 0
 

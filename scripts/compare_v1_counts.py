@@ -2,19 +2,14 @@
 
 Usage: uv run python scripts/compare_v1_counts.py [configs/munich_2025.yaml]
 
-Activity is built from v1's combined file and compared with v1 TrafficCounts on the same
-input. It must be identical. The full chain (store -> QA -> Activity) is then compared with
-v1 for both periods. Without the marker links it must equal v1 with the R3 rule.
-The rest of this docstring is about the counts QA, compared with
-data_preprocessing/31 -> counting_data_combined.parquet.
+Pass/fail: Activity is built from v1's combined file with v1's day types (scripts/v1_inputs.py) and
+compared with v1 TrafficCounts on the same input. It must be identical.
 
-v1's combined file was built from 2019-2025 counts, so v2 is run on the same period
-(outlier detection uses all years at once). Expected differences:
-- BASt missing-value markers (-1, 2019): v1 summed them as negative counts, v2 treats
-  them as missing (0 in the link sum). Every difference must belong to a (link, vehicle
-  class) with marker days; anything else is reported as unexplained.
-- R3: v2 marks links without data in the completeness window as incomplete. The v1 rule
-  is recomputed from v2's completeness to check that only this rule differs.
+Reported, not checked: the counts QA (data_preprocessing/31 -> counting_data_combined.parquet) and the full
+chain (store -> QA -> Activity) against v1 for both periods. v2 now differs from v1 on purpose: counts from
+the raw exports and archives (BASt 2021-2022 raw instead of annual, flags), the store calendar (D22) and R3
+(links without data in the completeness window are incomplete). Until the switch to the raw ingests, the only
+differences were R3 and BASt's -1 markers (commit cc324e9).
 """
 
 import sys
@@ -29,10 +24,11 @@ import pandas.testing as pdt
 from drive import store
 from drive.config import load_config
 from drive.domain.activity import Activity
-from drive.domain.calendar import combined_day_types
-from drive.io.calendar_excel import read_calendar
 from drive.pipeline import load_activity, load_day_types, load_link_counts
 from drive.schemas import HOURS
+
+sys.path.insert(0, str(Path(__file__).parent))
+import v1_inputs
 
 V1_FILE = 'restricted_input/counting_data/counting_data_combined.parquet'
 V1_FILE_FROM_2018 = 'restricted_input/counting_data/counting_data_combined_from2018.parquet'
@@ -49,7 +45,7 @@ def load_v1(data_root: Path, file: str = V1_FILE) -> pd.DataFrame:
 
 
 def marker_link_classes(config) -> pd.DataFrame:
-    """(road_link_id, vehicle_class) pairs with BASt missing-value markers in 2019-2025."""
+    """(road_link_id, vehicle_class) pairs with missing BASt hours in 2019-2025 (v1's -1 markers, flags since)."""
     raw = store.read_counts(config.paths.store, config.run.data_version, metric='volume',
                             start=config.counts_qa.period_start.isoformat())
     marked = raw[(raw['source'] == 'BASt') & raw[HOURS].isna().any(axis=1)]
@@ -83,7 +79,7 @@ def compare_link_counts(config) -> bool:
 
     print(f'\nRows that differ: {len(diff)} (only v1: {(diff["_merge"] == "left_only").sum()}, '
           f'only v2: {(diff["_merge"] == "right_only").sum()}, values: {(diff["_merge"] == "both").sum()})')
-    print(f'  explained by BASt markers: {explained.sum()} rows on '
+    print(f'  on links with missing BASt hours: {explained.sum()} rows on '
           f'{diff.loc[explained, "road_link_id"].nunique()} links')
     unexplained = diff[~explained]
     print(f'  unexplained: {len(unexplained)}')
@@ -117,7 +113,7 @@ def compare_activity(config) -> bool:
 
     v1_input = load_v1(config.paths.data_root)
     years = list(range(v1_input['date'].dt.year.min(), v1_input['date'].dt.year.max() + 1))
-    day_types = combined_day_types(read_calendar(config.paths.calendar, years))
+    day_types = v1_inputs.day_types(config.paths.data_root, years)
 
     start = time.perf_counter()
     v2 = Activity(v1_input, day_types, config.run.reference_year, config.run.reference_day_type)
@@ -184,12 +180,12 @@ def compare_chain(config, start: date, v1_file: str, traffic_model: str, referen
     v1 = Activity(v1_rows, day_types, run.reference_year, run.reference_day_type)
     v1_r3 = Activity(v1_r3_rows, day_types, run.reference_year, run.reference_day_type)
     _print_effect('R3 (v1 with the R3 rule vs v1)', v1_r3, v1)
-    _print_effect('BASt markers (v2 chain vs v1 with the R3 rule)', v2, v1_r3)
+    _print_effect('v2 chain vs v1 with the R3 rule', v2, v1_r3)
 
     # Without the marker links nothing else may differ
     marker_links = set(marker_link_classes(config)['road_link_id'])
     v2_rows, _, _ = load_link_counts(config)
-    print(f'  without the {len(marker_links)} marker links, v2 chain vs v1 with the R3 rule:')
+    print(f'  without the {len(marker_links)} links with missing BASt hours, v2 chain vs v1 with the R3 rule:')
     clean_v2 = Activity(v2_rows[~v2_rows['road_link_id'].isin(marker_links)], day_types,
                         run.reference_year, run.reference_day_type)
     clean_v1 = Activity(v1_r3_rows[~v1_r3_rows['road_link_id'].isin(marker_links)], day_types,
@@ -219,15 +215,12 @@ def report_period_effect(config) -> None:
 
 if __name__ == '__main__':
     config = load_config(sys.argv[1] if len(sys.argv) > 1 else 'configs/munich_2025.yaml')
-    config.run.calendar_source = 'v1_workbook'  # v1's day types and profile groups
-    link_counts_ok = compare_link_counts(config)
-    print('\nLINK COUNTS:', 'OK (only expected differences)' if link_counts_ok else 'UNEXPLAINED DIFFERENCES')
-    print('\nActivity on v1 input vs TrafficCounts:')
+    print('Activity on v1 input vs TrafficCounts:')
     activity_ok = compare_activity(config)
     print('\nACTIVITY:', 'OK (identical)' if activity_ok else 'DIFFERENT')
-    chain_ok = compare_chain(config, date(2019, 1, 1), V1_FILE, 'visum2025', 2025)
-    print('\nCHAIN 2019-2025:', 'OK (only R3 and markers)' if chain_ok else 'UNEXPLAINED DIFFERENCES')
-    chain_2018_ok = compare_chain(config, date(2018, 1, 1), V1_FILE_FROM_2018, 'visum2019', 2019)
-    print('\nCHAIN 2018-2025:', 'OK (only R3 and markers)' if chain_2018_ok else 'UNEXPLAINED DIFFERENCES')
+    print('\nReported only, v2 differs from v1 on purpose (see the docstring):')
+    compare_link_counts(config)
+    compare_chain(config, date(2019, 1, 1), V1_FILE, 'visum2025', 2025)
+    compare_chain(config, date(2018, 1, 1), V1_FILE_FROM_2018, 'visum2019', 2019)
     report_period_effect(config)
-    sys.exit(0 if link_counts_ok and activity_ok and chain_ok and chain_2018_ok else 1)
+    sys.exit(0 if activity_ok else 1)

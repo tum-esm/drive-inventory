@@ -4,7 +4,7 @@ Usage: uv run python scripts/compare_v1_starts.py [configs/munich_2025.yaml]
 
 For each traffic model: v1's loop over zones (copied from notebook 11) on v1's GeoPackages, against
 domain.cold_start on the store. Rows are compared in order (the store keeps v1's row order, see
-compare_v1_visum.py). Also compares the daily starts within the clip boundary, which v1 computes as
+compare_v1_visum.py). Also compares the daily starts within the clip area (v2: VG250), which v1 computes as
 starts per metre times the clipped length.
 """
 
@@ -50,9 +50,9 @@ def main(config_path: str) -> int:
     if config.run is None or config.cold_start is None:
         raise ValueError('The config needs the run and cold_start sections')
     c = config.cold_start
-    config.run.clip_source = 'v1_file'  # v1's boundary
-    boundary = load_clip_boundary(config)
-    assert boundary is not None
+    boundary = load_clip_boundary(config)  # v2's clip area for both, so that only the distribution is compared
+    if boundary is None:
+        raise ValueError('The config needs run.clip_ags')
     failed = False
     for model, m in config.traffic_models.items():
         year = model.removeprefix('visum')

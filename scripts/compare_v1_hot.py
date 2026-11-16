@@ -2,17 +2,16 @@
 
 Usage: uv run python scripts/compare_v1_hot.py [configs/munich_2025.yaml]
 
-1. Kernel on v1's inputs: Activity comes from v1's combined counts file (identical to v1
-   TrafficCounts, see compare_v1_counts.py), and the links with their share corrections come
-   from the baseline. Every link and column must match within the tolerance. The kernel's own
-   share corrections are compared with the baseline's as a separate check.
+1. Kernel on v1's inputs (pass/fail): Activity comes from v1's combined counts file with v1's day types
+   (scripts/v1_inputs.py; identical to v1 TrafficCounts, see compare_v1_counts.py), and the links with their
+   share corrections come from the baseline. Every link and column must match within the tolerance. The
+   kernel's own share corrections are compared with the baseline's as a separate check.
    The hourly profile with v1's definition must match v1's hourly worker on sample days.
-2. Full chain from the store: clipped links must match the baseline row by row. Emissions may
-   differ only through the known count differences (BASt -1 markers, compare_v1_counts.py), so
-   the differences are reported per road type, vehicle class and component.
-3. Without the links with markers, the chain and v1's counts must give the same emissions.
-4. Aggregated mode: as in 1 and 2, against v1's aggregated line source. It doesn't use gradients,
-   so the v1.1-asis file is still valid after the gradient fix.
+2. Full chain from the store (reported): totals per component, vehicle class and road type in % of the
+   baseline. v2 differs on purpose: VG250 clip area (R23), counts from the raw ingests, store calendar (D22).
+   Until those switches the chain matched the baseline row by row within 0.01 % (commit 6cd20b5).
+3. Aggregated mode: the kernel on v1's inputs against v1's aggregated line source (pass/fail), and the chain
+   from the store (reported). It doesn't use gradients, so the v1.1-asis file is still valid.
 """
 
 import sys
@@ -24,7 +23,8 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent))
-from compare_v1_counts import load_v1, marker_link_classes
+import v1_inputs
+from compare_v1_counts import load_v1
 
 from drive import store
 from drive.config import load_config
@@ -37,23 +37,27 @@ from drive.domain.kernel import (
     scaling_factors,
     share_corrections,
 )
-from drive.pipeline import compute_hot_emissions, kernel_params, load_day_types, load_hot_factors, load_link_counts
+from drive.pipeline import compute_hot_emissions, kernel_params, load_hot_factors
 
 BASELINE = 'inventory/baselines/v1.3-gradientfix/linesource_Munich_2025_hbefa501007_specific_visum2025.gpkg'
 YEAR = 2025
 RTOL, ATOL = 1e-9, 1e-9
-GEOMETRY_TOLERANCE_M = 1e-6  # clipped coordinates differ by up to 1e-9 m between GEOS versions
 AGGREGATED_BASELINE = 'inventory/baselines/v1.1-asis/linesource_Munich_2025_hbefa501007_aggregated_visum2025.gpkg'
 V1_PROFILE = 'inventory/baselines/v1.1-asis/GNFR_F_hot_timeprofile_2025.csv'
 # a normal weekday, a Saturday, a Sunday and a day in the summer vacation
 PROFILE_DAYS = ['2025-03-04', '2025-03-08', '2025-03-09', '2025-08-13']
-CHAIN_LIMIT_PERCENT = 0.01  # per road type x vehicle class x component
+
+
+def v1_activity(config) -> tuple[Activity, pd.Series]:
+    """Activity from v1's combined counts file with v1's day types, and the day types."""
+    rows = load_v1(config.paths.data_root)
+    years = list(range(rows['date'].dt.year.min(), rows['date'].dt.year.max() + 1))
+    day_types = v1_inputs.day_types(config.paths.data_root, years)
+    return Activity(rows, day_types, config.run.reference_year, config.run.reference_day_type), day_types
 
 
 def check_kernel(config, params, baseline: pd.DataFrame) -> bool:
-    root = config.paths.data_root
-    day_types = load_day_types(config)
-    activity = Activity(load_v1(root), day_types, config.run.reference_year, config.run.reference_day_type)
+    activity, day_types = v1_activity(config)
     factors = load_hot_factors(config, YEAR, store.resolve_version(config.paths.store, config.run.data_version))
     dates = pd.date_range(f'{YEAR}-01-01', f'{YEAR}-12-31')
 
@@ -144,77 +148,34 @@ def check_profiles(config, params, baseline, activity, result, ef, dates) -> boo
     return bool(closes.all()) and worker_ok
 
 
-def check_chain(config, baseline: gpd.GeoDataFrame) -> bool:
+def totals_frame(emissions: pd.DataFrame, road_type: pd.Series, length_km: np.ndarray) -> pd.DataFrame:
+    """Annual g per road type, vehicle class and component."""
+    grams = emissions.mul(length_km, axis=0).groupby(road_type.to_numpy()).sum().stack()
+    frame = grams.rename('g').reset_index()
+    frame.columns = ['road_type', 'column', 'g']
+    frame[['vehicle_class', 'component']] = frame['column'].str.split('_', n=1, expand=True)
+    return frame
+
+
+def check_chain(config, baseline: gpd.GeoDataFrame) -> None:
     run = compute_hot_emissions(config)
-    links = run.links
     print(', '.join(f'{stage} {value:.1f} s' for stage, value in run.seconds.items()) +
           f'; store batch {run.version}; links with negative volumes: {run.hot.negative_volume_links}')
-
-    ok = len(links) == len(baseline)
-    print(f'Rows: {len(links)} in v2, {len(baseline)} in the baseline')
-    if not ok:
-        return False
-    for column in ['road_link_id', 'road_type', 'scaling_road_type', 'hour_capacity', 'lanes', 'hbefa_speed', 'speed',
-                   'hbefa_gradient', 'dtv_SUM', 'dtv_HGV', 'dtv_PC', 'dtv_LCV']:
-        different = links[column].to_numpy() != baseline[column].to_numpy()
-        ok &= not different.any()
-        if different.any():
-            print(f'  {column} differs in {different.sum()} rows')
-    same_geometry = links.geometry.reset_index(drop=True).geom_equals_exact(baseline.geometry, GEOMETRY_TOLERANCE_M)
-    ok &= bool(same_geometry.all())
-    print(f'Link attributes match: {ok}; rows with different geometry: {(~same_geometry).sum()}')
-
+    print(f'Link pieces: {len(run.links)} in v2 (VG250), {len(baseline)} in the baseline (v1 boundary)')
     columns = run.hot.emissions.columns
-    for name in ['hgv_corr', 'lcv_corr']:
-        old_corrections = baseline[name].to_numpy()
-        relative = np.abs(run.corrections[name].to_numpy() - old_corrections) / np.where(old_corrections == 0, 1, old_corrections)
-        print(f'{name}: largest relative difference {relative.max():.2e}')
+    new = totals_frame(run.hot.emissions, run.links['road_type'], run.links.length.to_numpy() / 1000)
+    old = totals_frame(baseline[columns], baseline['road_type'], baseline.length.to_numpy() / 1000)
+    frame = new.merge(old, on=['road_type', 'column', 'vehicle_class', 'component'], suffixes=('_new', '_old'))
 
-    length = links.length.to_numpy() / 1000
-    new, old = run.hot.emissions.to_numpy(), baseline[columns].to_numpy()
-    per_link = np.abs(new - old) / np.where(old == 0, np.nan, np.abs(old))
-    print(f'Per link: {(~np.isclose(new, old, rtol=RTOL, atol=ATOL)).sum()} of {new.size} values differ, '
-          f'median relative difference {np.nanmedian(per_link):.2e}, largest {np.nanmax(per_link):.2e}')
-
-    frame = pd.DataFrame({'road_type': np.repeat(links['road_type'].to_numpy(), len(columns)),
-                          'column': np.tile(columns, len(links)),
-                          'new': (new * length[:, None]).ravel(), 'old': (old * length[:, None]).ravel()})
-    frame[['vehicle_class', 'component']] = frame['column'].str.split('_', n=1, expand=True)
     def percent(by: list[str]) -> pd.Series:
-        totals = frame.groupby(by)[['new', 'old']].sum()
-        return (totals['new'] / totals['old'] - 1) * 100
+        totals = frame.groupby(by)[['g_new', 'g_old']].sum()
+        return (totals['g_new'] / totals['g_old'] - 1) * 100
     print('All vehicle classes, change in %, by component:')
-    print(percent(['component']).round(5).to_string())
+    print(percent(['component']).round(3).to_string())
     print('By vehicle class:')
-    print(percent(['vehicle_class']).round(5).to_string())
+    print(percent(['vehicle_class']).round(3).to_string())
     print('By road type:')
-    print(percent(['road_type']).round(5).to_string())
-    detail = percent(['road_type', 'vehicle_class', 'component'])
-    print(f'Largest change per road type x class x component: {detail.abs().max():.5f} % at {detail.abs().idxmax()}')
-    print(f'Within {CHAIN_LIMIT_PERCENT} %: {bool(detail.abs().max() <= CHAIN_LIMIT_PERCENT)}')
-    return ok and bool(detail.abs().max() <= CHAIN_LIMIT_PERCENT)
-
-
-def check_markers(config, params, baseline: pd.DataFrame) -> bool:
-    """Without the links with BASt markers, the chain and v1's counts must give the same emissions."""
-    day_types = load_day_types(config)
-    run = config.run
-    markers = set(marker_link_classes(config)['road_link_id'])
-    v2_rows = load_link_counts(config)[0]
-    v1_rows = load_v1(config.paths.data_root)
-    # with the R3 rule, as in compare_v1_counts.py, so that only the markers can differ
-    v1_rows = v1_rows.assign(complete=v1_rows['completeness'] > config.counts_qa.completeness_threshold)
-    def emissions(rows: pd.DataFrame) -> np.ndarray:
-        activity = Activity(rows[~rows['road_link_id'].isin(markers)], day_types, run.reference_year, run.reference_day_type)
-        corrections = share_corrections(baseline, activity.vehicle_shares, day_types, run.reference_year, run.reference_day_type)
-        factors = load_hot_factors(config, YEAR, store.resolve_version(config.paths.store, run.data_version))
-        dates = pd.date_range(f'{YEAR}-01-01', f'{YEAR}-12-31')
-        return hot_emissions(baseline, corrections, activity, dates, build_ef_table(baseline, factors, params), params) \
-            .emissions.to_numpy()
-    new, old = emissions(v2_rows), emissions(v1_rows)
-    different = ~np.isclose(new, old, rtol=RTOL, atol=ATOL)
-    print(f'Without {len(markers)} marker links: {different.sum()} of {new.size} values differ')
-    return not different.any()
+    print(percent(['road_type']).round(3).to_string())
 
 
 def check_aggregated(config, params) -> bool:
@@ -223,7 +184,7 @@ def check_aggregated(config, params) -> bool:
     config.run.hot_mode = 'aggregated'
     run = config.run
     version = store.resolve_version(config.paths.store, run.data_version)
-    activity = Activity(load_v1(config.paths.data_root), load_day_types(config), run.reference_year, run.reference_day_type)
+    activity, _ = v1_activity(config)
     ef = build_aggregated_ef_table(baseline, load_hot_factors(config, YEAR, version), params)
     dates = pd.date_range(f'{YEAR}-01-01', f'{YEAR}-12-31')
     start = time.perf_counter()
@@ -237,36 +198,33 @@ def check_aggregated(config, params) -> bool:
           f'{np.nanmax(relative):.2e}; {seconds:.1f} s')
 
     chain = compute_hot_emissions(config)
-    same_rows = len(chain.links) == len(baseline) and (chain.links['road_link_id'].to_numpy() == baseline['road_link_id'].to_numpy()).all()
     length = chain.links.length.to_numpy() / 1000
-    totals = (chain.hot.emissions.to_numpy() * length[:, None]).sum(axis=0) / (old * length[:, None]).sum(axis=0) - 1
+    old_length = baseline.length.to_numpy() / 1000
+    totals = (chain.hot.emissions.to_numpy() * length[:, None]).sum(axis=0) / (old * old_length[:, None]).sum(axis=0) - 1
     zero = np.isnan(totals)
-    print(f'From the store: same rows {bool(same_rows)}, largest change in totals per class x component '
-          f'{np.nanmax(np.abs(totals)) * 100:.5f} %, {int(zero.sum())} columns are zero in both')
+    print(f'From the store (reported): {len(chain.links)} link pieces against {len(baseline)}; change in totals per '
+          f'class x component from {np.nanmin(totals) * 100:.3f} to {np.nanmax(totals) * 100:.3f} %, '
+          f'{int(zero.sum())} columns are zero in both')
     profile_total = chain.hot.profiles['length_km'].sum(axis=(0, 1)).ravel()
     annual = (chain.hot.emissions.to_numpy() * length[:, None]).sum(axis=0)
     sums = bool(np.isclose(profile_total, annual, rtol=RTOL, atol=ATOL).all())
     print(f'Profile sums to the annual totals: {sums}')
-    return not different.any() and bool(same_rows) and bool(np.nanmax(np.abs(totals)) * 100 <= CHAIN_LIMIT_PERCENT) and sums
+    return not different.any() and sums
 
 
 def main(config_path: str = 'configs/munich_2025.yaml') -> int:
     config = load_config(config_path)
-    config.run.calendar_source = 'v1_workbook'  # v1's day types and profile groups
-    config.run.clip_source = 'v1_file'  # v1's boundary
     params = kernel_params(config)
     baseline = gpd.read_file(config.paths.data_root / BASELINE)
 
     print('1. Kernel on v1 inputs')
     kernel_ok = check_kernel(config, params, baseline)
-    print(f'Kernel: {"OK" if kernel_ok else "DIFFERENT"}\n\n2. Full chain from the store')
-    chain_ok = check_chain(config, baseline)
-    print(f'Chain: {"OK" if chain_ok else "DIFFERENT"}\n\n3. Are the BASt markers the only cause?')
-    markers_ok = check_markers(config, params, baseline)
-    print(f'Markers: {"OK" if markers_ok else "DIFFERENT"}\n\n4. Aggregated mode')
+    print(f'Kernel: {"OK" if kernel_ok else "DIFFERENT"}\n\n2. Full chain from the store (reported)')
+    check_chain(config, baseline)
+    print('\n3. Aggregated mode')
     aggregated_ok = check_aggregated(config, params)
     print(f'Aggregated: {"OK" if aggregated_ok else "DIFFERENT"}')
-    return 0 if kernel_ok and chain_ok and markers_ok and aggregated_ok else 1
+    return 0 if kernel_ok and aggregated_ok else 1
 
 
 if __name__ == '__main__':

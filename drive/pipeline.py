@@ -34,6 +34,7 @@ from drive.domain.kernel import (
 from drive.domain.meteo import TemperatureReport, combine_stations, station_series, to_local_hourly
 from drive.io.boundaries import LAND
 from drive.io.counter_links import apply_overrides, read_overrides
+from drive.schemas import COLD_PROFILE, HOT_PROFILE
 
 
 def _require(config: DriveConfig):
@@ -409,7 +410,7 @@ def run_inventory(config: DriveConfig) -> list[str]:
     mode = '_aggregated' if run_config.hot_mode == 'aggregated' else ''
     stem = f'{run_config.traffic_model}_{hot.dates[0].year}_hbefa{run_config.hbefa_version}_batch{hot.version}'
     table = hot_results(hot)
-    profile = hot_profile(hot, config)
+    profile = HOT_PROFILE.validate(hot_profile(hot, config))
     table.to_parquet(results / f'hot_{stem}{mode}.parquet')
     profile.to_parquet(results / f'hot_profile_{stem}{mode}.parquet')
     scaling_factors(profile.rename(columns={'emission_g': 'emission'})) \
@@ -437,7 +438,7 @@ def run_inventory(config: DriveConfig) -> list[str]:
         cold_table = cold_results(cold)
         cold_table.to_parquet(results / f'cold_{stem}.parquet')
         tables['cold'], layers['cold'] = cold_table, outputs.line_sources(cold.links, cold_table)
-        cold.hourly.to_parquet(results / f'cold_profile_{stem}.parquet')
+        COLD_PROFILE.validate(cold.hourly).to_parquet(results / f'cold_profile_{stem}.parquet')
         scaling_factors(cold.hourly.rename(columns={'emission_g': 'emission'})) \
             .to_csv(results / f'cold_timeprofile_{stem}.csv', index=False)
         starts = ', '.join(f'{vc} {value:.0f}' for vc, value in cold.daily_starts.items())
@@ -460,7 +461,7 @@ def run_inventory(config: DriveConfig) -> list[str]:
         grid = gpd.read_file(grid_config.path)
         cells = outputs.gridded(layers, grid, grid_config.cell_id)
         path = results / f'grid_{name}_{stem}{mode}.gpkg'
-        outputs.write_line_sources(path, cells)
+        outputs.write_layers(path, cells)
         inside = cells['total']['CO2(rep)'].sum() / 1000
         log.append(f'{path} (layers {", ".join(cells)}, kg per cell), {len(grid)} cells, '
                    f'{time.perf_counter() - start:.1f} s; CO2(rep) inside the grid {inside:.0f} t of '

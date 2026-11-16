@@ -1,9 +1,12 @@
 """Known-answer test of the output summary. All numbers are invented."""
 
+import geopandas as gpd
 import pandas as pd
 import pytest
+from pandera.errors import SchemaError
+from shapely.geometry import LineString
 
-from drive.outputs import summary
+from drive.outputs import summary, write_line_sources
 
 
 def test_summary_converts_g_per_km_and_length_to_tonnes_per_road_type():
@@ -22,3 +25,18 @@ def test_summary_converts_g_per_km_and_length_to_tonnes_per_road_type():
     assert result[('hot', 'Distributor/Secondary', 'PC', 'NOx')] == pytest.approx(0.5)
     assert result[('hot', 'Motorway-Nat', 'PC', 'NOx')] == pytest.approx(8.0)
     assert result.sum() == pytest.approx(8.5)
+
+
+def test_line_source_contract_rejects_wrong_crs_and_negative_hot_values(tmp_path):
+    """Line sources in EPSG:4326 (lengths in degrees) or with a negative hot value must not be written (R7)."""
+    def layer(value, crs):
+        return gpd.GeoDataFrame({'road_link_id': [1], 'from_node': [10], 'piece': [0],
+                                 'road_type': ['Distributor/Secondary'], 'scaling_road_type': ['Distributor/Secondary'],
+                                 'length_km': [1.0], 'PC_NOx': [value]},
+                                geometry=[LineString([(0, 0), (1000, 0)])], crs=crs)
+
+    write_line_sources(tmp_path / 'ok.gpkg', {'hot': layer(5.0, 'EPSG:25832'), 'cold': layer(-1.0, 'EPSG:25832')})
+    with pytest.raises(ValueError, match='EPSG:25832'):
+        write_line_sources(tmp_path / 'crs.gpkg', {'hot': layer(5.0, 'EPSG:4326')})
+    with pytest.raises(SchemaError):
+        write_line_sources(tmp_path / 'neg.gpkg', {'hot': layer(-1.0, 'EPSG:25832')})

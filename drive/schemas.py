@@ -5,6 +5,8 @@ local wall-clock hours, as delivered by the counting data providers. DST days ar
 corrected here (24 columns per day).
 """
 
+import re
+
 import pandera.pandas as pa
 
 HOURS = [f'h{h:02d}' for h in range(24)]
@@ -244,3 +246,90 @@ BOUNDARIES = pa.DataFrameSchema(
     ordered=True,
     coerce=True,
 )
+
+
+# ---- outputs of `drive run` (R7, R12; docs/outputs_README.md) ----
+
+OUTPUT_CRS = 'EPSG:25832'  # metric, so that lengths are in metres and g/km x km gives g
+OUTPUT_VEHICLE_CLASSES = ['PC', 'LCV', 'HGV', 'BUS', 'MOT']
+LINE_SOURCE_KEY = ['road_link_id', 'from_node', 'piece']
+_EMISSION_COLUMN = rf'^({"|".join(OUTPUT_VEHICLE_CLASSES)})_.+$'
+_finite = pa.Check(lambda s: s.abs() < float('inf'), element_wise=False, error='values must be finite')
+
+
+def _line_sources(non_negative: bool) -> pa.DataFrameSchema:
+    """g/km per link piece over the period, one column per {vehicle class}_{component}."""
+    checks = [_finite, _non_negative] if non_negative else [_finite]
+    return pa.DataFrameSchema(
+        {
+            'road_link_id': pa.Column('int64'),
+            'from_node': pa.Column('int64'),
+            'piece': pa.Column('int64', pa.Check.ge(0)),
+            'road_type': pa.Column(str, pa.Check.isin(HBEFA_ROAD_TYPES)),
+            'scaling_road_type': pa.Column(str),
+            'length_km': pa.Column(float, pa.Check.gt(0)),
+            _EMISSION_COLUMN: pa.Column(float, checks, regex=True),
+        },
+        unique=LINE_SOURCE_KEY,
+        strict='filter',
+        coerce=False,
+    )
+
+
+# hot emissions are never negative since the HGV cap (D27); cold start excess emissions can be (HBEFA's NOx)
+HOT_LINE_SOURCES = _line_sources(non_negative=True)
+COLD_LINE_SOURCES = _line_sources(non_negative=False)
+
+SUMMARY = pa.DataFrameSchema(
+    {
+        'kind': pa.Column(str, pa.Check.isin(['hot', 'cold'])),
+        'road_type': pa.Column(str, pa.Check.isin(HBEFA_ROAD_TYPES)),
+        'vehicle_class': pa.Column(str, pa.Check.isin(OUTPUT_VEHICLE_CLASSES)),
+        'component': pa.Column(str),
+        'emission_t': pa.Column(float, _finite),
+    },
+    unique=['kind', 'road_type', 'vehicle_class', 'component'],
+    strict=True,
+    ordered=True,
+)
+
+# hourly profiles: `time` is the local wall-clock hour (naive), 24 per day, as the counts (module docstring)
+_naive_hours = pa.Check(lambda s: s.dt.tz is None and bool((s == s.dt.floor('h')).all()),
+                        element_wise=False, error='time must be naive local whole hours')
+HOT_PROFILE = pa.DataFrameSchema(
+    {
+        'time': pa.Column('datetime64[ns]', _naive_hours),
+        'road_type': pa.Column(str, pa.Check.isin(HBEFA_ROAD_TYPES)),
+        'vehicle_class': pa.Column(str, pa.Check.isin(OUTPUT_VEHICLE_CLASSES)),
+        'component': pa.Column(str),
+        'emission_g': pa.Column(float, [_finite, _non_negative]),
+    },
+    unique=['time', 'road_type', 'vehicle_class', 'component'],
+    strict=True,
+)
+COLD_PROFILE = pa.DataFrameSchema(
+    {
+        'time': pa.Column('datetime64[ns]', _naive_hours),
+        'vehicle_class': pa.Column(str, pa.Check.isin(OUTPUT_VEHICLE_CLASSES)),
+        'component': pa.Column(str),
+        'emission_g': pa.Column(float, _finite),
+    },
+    unique=['time', 'vehicle_class', 'component'],
+    strict=True,
+)
+
+
+def grid_schema(cell_id: str) -> pa.DataFrameSchema:
+    """Gridded emissions: kg per cell over the period, one column per component, every cell once."""
+    return pa.DataFrameSchema(
+        {cell_id: pa.Column(nullable=False),
+         rf'^(?!(geometry|{re.escape(cell_id)})$).+$': pa.Column(float, _finite, regex=True)},
+        unique=[cell_id],
+        strict='filter',
+    )
+
+
+def check_crs(frame, expected: str = OUTPUT_CRS) -> None:
+    """Raises unless a GeoDataFrame is in the expected CRS."""
+    if frame.crs is None or frame.crs.to_string() != expected:
+        raise ValueError(f'Expected CRS {expected}, got {frame.crs}')

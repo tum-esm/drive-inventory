@@ -11,6 +11,7 @@ import geopandas as gpd
 import pandas as pd
 
 from drive.domain.gridding import by_component, grid_line_sources
+from drive.schemas import COLD_LINE_SOURCES, HOT_LINE_SOURCES, SUMMARY, check_crs, grid_schema
 
 KEYS = ['road_link_id', 'from_node', 'piece', 'road_type', 'scaling_road_type', 'length_km']
 
@@ -28,7 +29,19 @@ def line_sources(links: gpd.GeoDataFrame, table: pd.DataFrame) -> gpd.GeoDataFra
 
 
 def write_line_sources(path: Path, layers: dict[str, gpd.GeoDataFrame]) -> None:
-    """One GeoPackage with one layer per emission kind (hot, cold); replaces an existing file."""
+    """One GeoPackage with one layer per emission kind (hot, cold); replaces an existing file.
+
+    Raises:
+        pandera.errors.SchemaError, ValueError: if a layer breaks its contract (drive.schemas) or isn't in EPSG:25832
+    """
+    for name, frame in layers.items():
+        check_crs(frame)
+        (COLD_LINE_SOURCES if name == 'cold' else HOT_LINE_SOURCES).validate(frame)
+    write_layers(path, layers)
+
+
+def write_layers(path: Path, layers: dict[str, gpd.GeoDataFrame]) -> None:
+    """One GeoPackage with one layer per entry; replaces an existing file."""
     path.unlink(missing_ok=True)
     for name, frame in layers.items():
         frame.to_file(path, layer=name, driver='GPKG')
@@ -53,7 +66,7 @@ def summary(tables: dict[str, pd.DataFrame]) -> pd.DataFrame:
         long[['vehicle_class', 'component']] = long['column'].str.split('_', n=1, expand=True)
         long['emission_t'] = long['emission_g'] / 1e6
         rows.append(long.assign(kind=kind)[['kind', 'road_type', 'vehicle_class', 'component', 'emission_t']])
-    return pd.concat(rows, ignore_index=True)
+    return SUMMARY.validate(pd.concat(rows, ignore_index=True))
 
 
 def gridded(layers: dict[str, gpd.GeoDataFrame], grid: gpd.GeoDataFrame, cell_id: str) -> dict[str, gpd.GeoDataFrame]:
@@ -70,8 +83,13 @@ def gridded(layers: dict[str, gpd.GeoDataFrame], grid: gpd.GeoDataFrame, cell_id
         per_class = grid_line_sources(lines, emission_columns(lines), grid, cell_id)
         result[kind] = by_component(per_class) / 1000
     result['total'] = _total(list(result.values()))
-    return {kind: gpd.GeoDataFrame(cells.set_index(cell_id).join(frame).reset_index(), geometry='geometry',
-                                   crs=cells.crs) for kind, frame in result.items()}
+    layers_out = {kind: gpd.GeoDataFrame(cells.set_index(cell_id).join(frame).reset_index(), geometry='geometry',
+                                         crs=cells.crs) for kind, frame in result.items()}
+    schema = grid_schema(cell_id)
+    for frame in layers_out.values():
+        check_crs(frame)
+        schema.validate(frame)
+    return layers_out
 
 
 def _total(frames: list[pd.DataFrame]) -> pd.DataFrame:

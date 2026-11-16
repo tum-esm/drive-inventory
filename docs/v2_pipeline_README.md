@@ -168,4 +168,5 @@ Known caveat: in 2018 most city detectors only report from December. The 2018 sc
 | Code | `uv run ruff check`, `uv run pyright`, also in CI |
 | Results against v1 | `scripts/compare_v1_*.py` on the real data, against the baselines in `data/inventory/baselines/`; local only. They stay exact on v1's own inputs and report the differences of the v2 chain |
 | Counted vs modelled shares per counted link | `scripts/check_link_shares.py [config] [scaling road type]` |
-| Whole series | `scripts/run_series.py`, compared with the latest baseline (currently `v2.9-hottemperature`) |
+| Whole series | `scripts/run_series.py`, compared with the latest baseline (currently `v2.10-counteroverrides`) |
+| Output contracts | `drive/schemas.py` (line sources, summary, grids, profiles: keys, CRS EPSG:25832, finite values, hot ≥ 0, naive local hours), checked whenever `drive run` writes |

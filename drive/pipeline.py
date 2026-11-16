@@ -137,14 +137,18 @@ def load_link_counts(config: DriveConfig) -> tuple[pd.DataFrame, QAReport, int]:
                       iqr_range=qa.iqr_range,
                       scaling_road_types=config.scaling_road_types,
                       outlier_groups=OUTLIER_GROUPS,
+                      missing_flags=tuple(qa.missing_flags),
+                      drop_incomplete_days=qa.drop_incomplete_days,
                       share_check_classes=tuple(qa.share_check_classes),
                       share_z_threshold=qa.share_z_threshold,
                       share_min_days=qa.share_min_days,
                       share_min_links=qa.share_min_links)
 
     raw['date'] = raw['date'].astype('datetime64[us]')
-    volume = link_volumes(raw, links, attributes, load_day_types(config, version))
+    volume, incomplete = link_volumes(raw, links, attributes, load_day_types(config, version),
+                                      params.missing_flags, params.drop_incomplete_days)
     link_counts, report = qa_link_counts(volume, attributes, params)
+    report.incomplete_days = incomplete
     return link_counts, report, version
 
 
@@ -360,6 +364,7 @@ def run_inventory(config: DriveConfig) -> list[str]:
         removed = ', '.join(f'{c} {len(g)} link-years on {g["road_link_id"].nunique()} links'
                             for c, g in outliers.groupby('vehicle_class'))
         log.append(f'Implausible class shares removed (counts QA): {removed or "none"}')
+    log.append(f'Incomplete link-days dropped (counts QA, per class): {hot.report.incomplete_days}')
 
     if config.cold_start is not None:
         start = time.perf_counter()

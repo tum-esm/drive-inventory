@@ -1,9 +1,10 @@
-"""Known-answer test of the class-share check in the counts QA. All counts are invented."""
+"""Known-answer tests of the counts QA. All counts are invented."""
 
 import numpy as np
 import pandas as pd
 
-from drive.domain.counts_qa import QAParams, _drop_share_outliers
+from drive.domain.counts_qa import QAParams, _drop_share_outliers, link_volumes
+from drive.schemas import HOURS
 
 ROAD = 'Motorway-Nat'
 
@@ -35,3 +36,35 @@ def test_share_check_removes_only_the_faulty_class_and_year():
     assert len(removed) == 31
     assert (removed['road_link_id'] == 6).all() and (removed['vehicle_class'] == 'LCV').all()
     assert (removed['date'].dt.year == 2024).all()
+
+
+def test_incomplete_link_days_are_dropped_not_summed_as_zero():
+    """One link counted by two detectors (both directions), 100 vehicles per hour each (D28).
+
+    Day 1 complete -> 4800. Day 2: detector B has a missing hour (flag 'a', value 0, as BASt delivers it).
+    Day 3: detector B has no row. v1 summed both as 4700 and 2400, i.e. too low; they must be dropped.
+    Day 4: detector B's hour is an estimate ('s'), which is kept.
+    """
+    def row(detector, date, flags='-' * 24, missing_hour=False):
+        hours = [100.0] * 24
+        if missing_hour:
+            hours[7] = 0.0
+        return {'source': 'BASt', 'detector_id': detector, 'detector_type': None, 'date': pd.Timestamp(date),
+                'vehicle_class': 'SUM', 'metric': 'volume', 'daily_value': sum(hours),
+                **dict(zip(HOURS, hours)), 'flags': flags}
+
+    a_flag = '-' * 7 + 'a' + '-' * 16
+    s_flag = '-' * 7 + 's' + '-' * 16
+    raw = pd.DataFrame([row('A', '2025-03-04'), row('B', '2025-03-04'),
+                        row('A', '2025-03-05'), row('B', '2025-03-05', a_flag, missing_hour=True),
+                        row('A', '2025-03-06'),
+                        row('A', '2025-03-07'), row('B', '2025-03-07', s_flag)])
+    raw['date'] = raw['date'].astype('datetime64[us]')
+    links = pd.DataFrame({'source': 'BASt', 'detector_id': ['A', 'B'], 'traffic_model': 'visum2025', 'road_link_id': 1})
+    attributes = pd.DataFrame({'road_type': [ROAD], 'road_type_ambiguous': [False]}, index=pd.Index([1]))
+    day_types = pd.Series(0, index=pd.date_range('2025-03-04', '2025-03-07'))
+
+    volume, dropped = link_volumes(raw, links, attributes, day_types, ('a', 'd', 'x'), drop_incomplete_days=True)
+
+    assert dict(zip(volume['date'].dt.day, volume['daily_value'])) == {4: 4800.0, 7: 4800.0}
+    assert dropped == 2

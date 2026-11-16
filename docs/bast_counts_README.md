@@ -152,7 +152,7 @@ Monthly cron job, e.g. on the 5th at 06:00:
 
 The command ends with a non-zero exit code on any error (network, format, unknown flag), so the job can alert on it.
 
-What v1 ignored, recorded as R41 in the backlog (how the counts QA should use the flags is still open):
+What v1 ignored (R41), and how the counts QA now handles it (see [How the counts QA uses the flags](#how-the-counts-qa-uses-the-flags)):
 
 - In many station-years the station counts no vehicle classes. Every class is then 0 with flag `a`, and v1 read those zeros as counts.
 - Stations 9064, 9219, 9220 and 9242 counted 5+1 classes in 2018 and/or 2019. v1's PC is then only `PmA` (cars with trailers) and LCV is 0.
@@ -245,7 +245,43 @@ Effect on `drive run` 2025 against the run on v1's BASt counts (store batch 61 v
 
 ## Open points
 
-- How the counts QA uses the flags (R41).
+## How the counts QA uses the flags
+
+Since spec D28 (R41) the counts QA (`drive/domain/counts_qa.py`, `link_volumes`) works as follows:
+
+- **Missing hours.** Hours with a flag in `counts_qa.missing_flags` count as missing: `a` (missing), `d` (faulty) and `x` (class not counted). So do hours without a value.
+- **Incomplete days are dropped.** With `drop_incomplete_days: true`, a link-day of a class is dropped if any of its detectors has a missing hour. It is also dropped if a detector that reported on the link in that year has no row that day. v1 summed missing values as 0.
+- **Estimates are kept.** `s` (estimate for a missing value) and `k` (estimate for a faulty value) are kept. `u` and `z` are regular values.
+
+Why, checked on the store (batch 82):
+
+| Days | Daily value / regular median of the same detector, year and weekday | Share of days |
+|---|---|---|
+| BASt, 1–3 hours `a` | 0.90 (IQR 0.83–0.97) | about 80 detector-days per year |
+| BASt, with `s`/`k` hours | 1.00–1.01 (IQR 0.93–1.08), like regular days | about 25 % of all days |
+| LHM link-day with a lane detector without a row | 0.78 (IQR 0.61–0.95) | 1 % of LHM link-days |
+
+- BASt delivers missing hours as 0 with flag `a`. A day with a few of them is about 10 % too low.
+- The estimates show no bias, and dropping them would remove a quarter of the data.
+- Fully missing days (24 × `a`) and station-years without classes were already dropped before, by the minimum daily value.
+
+The rule drops 0.2 % of the BASt link-days per class, 1.5 % for PC (the 5+1 station-years), and 1 % of the LHM link-days. A few link-years lose most of their days: there a direction or lane reported only for part of the year, for example 4163021/22 only from 10 November 2019. With `missing_flags: []` and `drop_incomplete_days: false` the QA behaves like v1.
+
+**Effect (series 2018–2025 against `v2.5-hgvcap`):**
+
+| | Change |
+|---|---|
+| Hot CO2(rep), all classes | −0.01 to −0.68 % |
+| Hot BUS | −0.5 to −8 % |
+| Hot MOT | up to −2.4 % |
+| Hot HGV | −0.6 to +2.4 % |
+| Cold | −0.9 to +0.25 % |
+
+Baseline: `data/inventory/baselines/v2.6-incompletedays`.
+
+BUS reacts most, because its share is the median BUS volume over few links and bus routes differ a lot. An example from the 2019-model series: link 52804341 (LHM 4013011/12) had a detector missing on 41 % of its days in 2019. Its completeness in the reference year falls from 0.70 to 0.42, below the 0.6 threshold. The completeness flag applies to all years of a link (v1 logic), so the link's complete 2024 data, a bus route with twice the median BUS volume, now leaves the shares too.
+
+- Completeness (spec R46, to implement). The intended rule: a link scales year Y only if it is at least 80 % complete in the reference year and in Y, each year on its own. The code still decides one flag per link from the reference year, with threshold 0.6 relative to the best-covered link (v1).
 
 After a change, check:
 

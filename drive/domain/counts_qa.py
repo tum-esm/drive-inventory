@@ -5,10 +5,11 @@ consistency, remove outliers, remove implausible class shares, validate against 
 model (SQV) and flag completeness in the reference window.
 
 Behaviour kept from v1 for comparability (candidates for later method decisions):
-- missing detector values on a link-day are summed as 0
 - outliers are detected per (link, vehicle class, day type group) over all years at once
 Deliberate changes: links without data in the completeness window are incomplete (R3), v1
 marked them complete. Implausible class shares are removed per link and year (R44, not in v1).
+Incomplete link-days are dropped (R41, D28): hours with a missing-value flag or without a value, and
+days on which a detector of the link didn't report; v1 summed missing values as 0.
 """
 
 from collections.abc import Mapping
@@ -37,6 +38,8 @@ class QAParams:
     iqr_range: tuple[float, float] = (2.5, 97.5)
     scaling_road_types: dict[str, str] = field(default_factory=dict)
     outlier_groups: Mapping[int, int] | None = None  # outlier groups, None keeps every day type on its own (v1)
+    missing_flags: tuple[str, ...] = ()  # hour flags that mean "no value" (BASt: a, d, x); () ignores flags (v1)
+    drop_incomplete_days: bool = False  # drop link-days with a missing hour or detector; False sums them as 0 (v1)
     share_check_classes: tuple[str, ...] = ()  # classes checked by _drop_share_outliers; () skips the step (v1)
     share_z_threshold: float = 3.5
     share_min_days: int = 30  # link-years with fewer days with a class split are not checked
@@ -46,6 +49,7 @@ class QAParams:
 @dataclass
 class QAReport:
     rows: dict[str, int] = field(default_factory=dict)  # rows after each step
+    incomplete_days: int = 0  # link-days (per class) dropped by link_volumes, see drop_incomplete_days
     outliers: int = 0
     links: int = 0
     links_valid: int = 0
@@ -85,21 +89,48 @@ def link_attributes(links: pd.DataFrame) -> pd.DataFrame:
 def link_volumes(raw_counts: pd.DataFrame,
                  counter_links: pd.DataFrame,
                  link_attributes: pd.DataFrame,
-                 day_types: pd.Series) -> pd.DataFrame:
+                 day_types: pd.Series,
+                 missing_flags: tuple[str, ...] = (),
+                 drop_incomplete_days: bool = False) -> tuple[pd.DataFrame, int]:
     """Daily volumes per road link with road and day type.
+
+    The detectors of a link (lanes, directions) are summed per day and class. With
+    `drop_incomplete_days` a link-day of a class is dropped when one of its detectors has an hour
+    without a value or with a flag in `missing_flags`, or when a detector that reported on the link
+    in that year has no row that day. Otherwise (v1) missing values count as 0, which makes such
+    days too low: BASt days with 1-3 missing hours by about 10 %, LHM link-days with a missing lane
+    detector by about 22 % (spec R41). BASt's estimates (`s`, `k`) are kept: they show no bias.
 
     Args:
         raw_counts: RAW_COUNTS rows
         counter_links: COUNTER_LINKS rows of one traffic model
         link_attributes: link_attributes() of the same model
         day_types: day type per date, must cover all dates
+        missing_flags: hour flags that mean "no value"
+        drop_incomplete_days: see above
 
     Returns:
-        pd.DataFrame: road_link_id, vehicle_class, date, road_type, day_type, daily_value, h00..h23
+        road_link_id, vehicle_class, date, road_type, day_type, daily_value, h00..h23; and the number
+        of link-days dropped as incomplete
     """
     volume = raw_counts[raw_counts['metric'] == 'volume']
     volume = volume.merge(counter_links[['source', 'detector_id', 'road_link_id']],
                           on=['source', 'detector_id'], how='inner')
+    dropped = 0
+    if drop_incomplete_days:
+        hours = volume[HOURS].to_numpy(dtype=float)
+        missing = np.isnan(hours)
+        if missing_flags:
+            flags = volume['flags'].fillna('-' * 24).str.pad(24, side='right', fillchar='-')
+            flag_hours = flags.to_numpy(dtype='U24').view('U1').reshape(-1, 24)  # one character per hour
+            missing |= np.isin(flag_hours, list(missing_flags))
+        year = volume['date'].dt.year
+        detectors = volume.groupby([volume['road_link_id'], year])['detector_id'].transform('nunique')
+        per_day = volume.groupby(KEY)['detector_id'].transform('nunique')
+        incomplete = pd.Series(missing.any(axis=1), index=volume.index) | (per_day < detectors)
+        incomplete = incomplete.groupby([volume[k] for k in KEY]).transform('any')
+        dropped = int(volume.loc[incomplete, KEY].drop_duplicates().shape[0])
+        volume = volume[~incomplete]
     # detectors of one link (lanes, directions) are summed; NaN counts as 0 as in v1
     volume = volume.groupby(KEY)[['daily_value'] + HOURS].sum().reset_index()
 
@@ -115,7 +146,7 @@ def link_volumes(raw_counts: pd.DataFrame,
         raise ValueError(f'No day type for {len(missing_dates)} dates, e.g. {sorted(missing_dates)[:3]}')
     volume['day_type'] = volume['date'].map(day_types).astype('int64')
 
-    return volume[KEY + ['road_type', 'day_type', 'daily_value'] + HOURS].reset_index(drop=True)
+    return volume[KEY + ['road_type', 'day_type', 'daily_value'] + HOURS].reset_index(drop=True), dropped
 
 
 def _drop_outliers(volume: pd.DataFrame,

@@ -173,6 +173,10 @@ counts_qa:
   sqv_threshold: 0.6
   completeness_threshold: 0.6
   iqr_range: [2.5, 97.5]
+  # incomplete link-days (spec R41, D28): BASt flags a (missing), d (faulty), x (class not counted) mark an hour as
+  # missing; a link-day with a missing hour or a detector without a row is dropped. Estimates (s, k) are kept
+  missing_flags: [a, d, x]
+  drop_incomplete_days: true
   # implausible class shares per link and year (spec R44, docs/vehicle_classes_README.md): a class's annual share on a
   # link is compared with the other links of its scaling road type in that year (robust z of the log share)
   share_check_classes: [LCV]

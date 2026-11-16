@@ -188,6 +188,10 @@ class CountsQAConfig(_Strict):
     sqv_threshold: float = 0.6
     completeness_threshold: float = 0.6
     iqr_range: tuple[float, float] = (2.5, 97.5)
+    # incomplete link-days (R41): hours with these flags count as missing; drop link-days with a missing hour or detector.
+    # Defaults reproduce v1 (flags ignored, missing values summed as 0)
+    missing_flags: list[str] = []
+    drop_incomplete_days: bool = False
     # implausible class shares per link and year (R44): classes to check, robust z of the log annual share within
     # scaling road type and year; [] skips the check (v1)
     share_check_classes: list[str] = []

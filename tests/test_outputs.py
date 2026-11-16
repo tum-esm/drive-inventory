@@ -1,12 +1,13 @@
 """Known-answer test of the output summary. All numbers are invented."""
 
 import geopandas as gpd
+import numpy as np
 import pandas as pd
 import pytest
 from pandera.errors import SchemaError
 from shapely.geometry import LineString
 
-from drive.outputs import summary, write_line_sources
+from drive.outputs import summary, vkt, write_line_sources
 
 
 def test_summary_converts_g_per_km_and_length_to_tonnes_per_road_type():
@@ -40,3 +41,22 @@ def test_line_source_contract_rejects_wrong_crs_and_negative_hot_values(tmp_path
         write_line_sources(tmp_path / 'crs.gpkg', {'hot': layer(5.0, 'EPSG:4326')})
     with pytest.raises(SchemaError):
         write_line_sources(tmp_path / 'neg.gpkg', {'hot': layer(-1.0, 'EPSG:25832')})
+
+
+def test_vkt_is_volume_times_length_per_road_type_level_of_service_and_class():
+    """Two link pieces of the same road type, 0.5 km and 2 km, two classes and two levels of service.
+
+    Piece 1: 1000 PC in Freeflow, 100 HGV in Heavy; piece 2: 500 PC in Freeflow.
+    PC Freeflow = 1000 x 0.5 + 500 x 2 = 1500 vehicle-km, HGV Heavy = 50.
+    Catches a lost length and volume put on the wrong level of service or class.
+    """
+    volume = np.zeros((2, 2, 2))  # piece, level of service, class
+    volume[0, 0, 0], volume[0, 1, 1], volume[1, 0, 0] = 1000, 100, 500
+    road = pd.Series(['Distributor/Secondary'] * 2)
+
+    result = vkt(road, np.array([0.5, 2.0]), volume, ['PC', 'HGV'], ['Freeflow', 'Heavy']) \
+        .set_index(['level_of_service', 'vehicle_class'])['vkt_km']
+
+    assert result[('Freeflow', 'PC')] == pytest.approx(1500.0)
+    assert result[('Heavy', 'HGV')] == pytest.approx(50.0)
+    assert result.sum() == pytest.approx(1550.0)

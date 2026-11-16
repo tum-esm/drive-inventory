@@ -254,6 +254,7 @@ OUTPUT_CRS = 'EPSG:25832'  # metric, so that lengths are in metres and g/km x km
 OUTPUT_VEHICLE_CLASSES = ['PC', 'LCV', 'HGV', 'BUS', 'MOT']
 LINE_SOURCE_KEY = ['road_link_id', 'from_node', 'piece']
 _EMISSION_COLUMN = rf'^({"|".join(OUTPUT_VEHICLE_CLASSES)})_.+$'
+_VKT_COLUMN = rf'^vkt_({"|".join(OUTPUT_VEHICLE_CLASSES)})$'  # vehicle-km per link piece over the period (hot layer)
 _finite = pa.Check(lambda s: s.abs() < float('inf'), element_wise=False, error='values must be finite')
 
 
@@ -269,6 +270,7 @@ def _line_sources(non_negative: bool) -> pa.DataFrameSchema:
             'scaling_road_type': pa.Column(str),
             'length_km': pa.Column(float, pa.Check.gt(0)),
             _EMISSION_COLUMN: pa.Column(float, checks, regex=True),
+            _VKT_COLUMN: pa.Column(float, [_finite, _non_negative], regex=True, required=False),
         },
         unique=LINE_SOURCE_KEY,
         strict='filter',
@@ -289,6 +291,19 @@ SUMMARY = pa.DataFrameSchema(
         'emission_t': pa.Column(float, _finite),
     },
     unique=['kind', 'road_type', 'vehicle_class', 'component'],
+    strict=True,
+    ordered=True,
+)
+
+# vehicle-km over the period per road type, level of service and vehicle class (replaces v1 notebook 02)
+VKT = pa.DataFrameSchema(
+    {
+        'road_type': pa.Column(str, pa.Check.isin(HBEFA_ROAD_TYPES)),
+        'level_of_service': pa.Column(str, pa.Check.isin(['Freeflow', 'Heavy', 'Satur.', 'St+Go', 'St+Go2'])),
+        'vehicle_class': pa.Column(str, pa.Check.isin(OUTPUT_VEHICLE_CLASSES)),
+        'vkt_km': pa.Column(float, [_finite, _non_negative]),
+    },
+    unique=['road_type', 'level_of_service', 'vehicle_class'],
     strict=True,
     ordered=True,
 )

@@ -1,4 +1,4 @@
-"""Output products of a run (spec R12): line-source GeoPackage, summary table and gridded emissions.
+"""Output products of a run (spec R12): line-source GeoPackage, summary table, vehicle-km and gridded emissions.
 
 Units: the line sources hold g/km per link piece over the run's period (one year), as v1's
 `linesource_*.gpkg`; the summary holds tonnes per period. Totals of a component are the sum of
@@ -8,17 +8,39 @@ g/km x length over the link pieces, so the line sources and the summary add up t
 from pathlib import Path
 
 import geopandas as gpd
+import numpy as np
 import pandas as pd
 
 from drive.domain.gridding import by_component, grid_line_sources
-from drive.schemas import COLD_LINE_SOURCES, HOT_LINE_SOURCES, SUMMARY, check_crs, grid_schema
+from drive.schemas import COLD_LINE_SOURCES, HOT_LINE_SOURCES, SUMMARY, VKT, check_crs, grid_schema
 
 KEYS = ['road_link_id', 'from_node', 'piece', 'road_type', 'scaling_road_type', 'length_km']
 
 
 def emission_columns(table: pd.DataFrame) -> list[str]:
-    """The {vehicle_class}_{component} columns of a result table (hot_results, cold_results)."""
-    return [c for c in table.columns if c not in KEYS and c != 'geometry']
+    """The {vehicle_class}_{component} columns of a result table (hot_results, cold_results), without vkt_*."""
+    return [c for c in table.columns if c not in KEYS and c != 'geometry' and not c.startswith('vkt_')]
+
+
+def vkt(road_type: pd.Series, length_km: np.ndarray, annual_volume: np.ndarray, vehicle_classes: list[str],
+        service_classes: list[str]) -> pd.DataFrame:
+    """Vehicle-km over the period per road type, level of service and vehicle class (spec R12, v1 notebook 02).
+
+    Args:
+        road_type: per link piece
+        length_km: per link piece
+        annual_volume: vehicles per [link piece, level of service, vehicle class] (kernel HotEmissions)
+
+    Returns:
+        VKT rows: road_type, level_of_service, vehicle_class, vkt_km
+    """
+    km = annual_volume * np.asarray(length_km)[:, None, None]
+    frame = pd.DataFrame(km.reshape(len(km), -1),
+                         columns=pd.MultiIndex.from_product([service_classes, vehicle_classes],
+                                                            names=['level_of_service', 'vehicle_class']))
+    long = frame.groupby(road_type.to_numpy()).sum().stack(['level_of_service', 'vehicle_class'], future_stack=True)
+    long = long.rename('vkt_km').rename_axis(['road_type', 'level_of_service', 'vehicle_class']).reset_index()
+    return VKT.validate(long)
 
 
 def line_sources(links: gpd.GeoDataFrame, table: pd.DataFrame) -> gpd.GeoDataFrame:

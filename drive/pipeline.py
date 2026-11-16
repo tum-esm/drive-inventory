@@ -20,6 +20,7 @@ from drive.domain.cold_start import (
 )
 from drive.domain.counts_qa import QAParams, QAReport, link_attributes, link_volumes, qa_link_counts
 from drive.domain.kernel import (
+    SERVICE_CLASSES,
     EfTable,
     HotEmissions,
     KernelParams,
@@ -315,10 +316,14 @@ def hot_profile(run: HotRun, config: DriveConfig) -> pd.DataFrame:
 
 
 def hot_results(run: HotRun) -> pd.DataFrame:
-    """Result table: g/km per link and piece, with the attributes needed to summarise it."""
+    """Result table: g/km per link and piece, with the attributes needed to summarise it, and the vehicle-km
+    per vehicle class (`vkt_<class>`, over the period)."""
     keys = run.links[['road_link_id', 'from_node', 'piece', 'road_type', 'scaling_road_type']].copy()
     keys['length_km'] = run.links.length / 1000
-    return pd.concat([keys, run.hot.emissions], axis=1)
+    vehicles = run.hot.annual_volume.sum(axis=1) * keys['length_km'].to_numpy()[:, None]
+    classes = list(run.hot.emissions.columns.str.split('_', n=1).str[0].unique())
+    vkt = pd.DataFrame(vehicles, index=keys.index, columns=[f'vkt_{vc}' for vc in classes])
+    return pd.concat([keys, run.hot.emissions, vkt], axis=1)
 
 
 @dataclass
@@ -452,6 +457,12 @@ def run_inventory(config: DriveConfig) -> list[str]:
     outputs.write_line_sources(linesource, layers)
     summary = outputs.summary(tables)
     summary.to_csv(results / f'summary_{stem}{mode}.csv', index=False)
+    vehicle_km = outputs.vkt(table['road_type'], table['length_km'].to_numpy(), hot.hot.annual_volume,
+                             kernel_params(config).vehicle_classes, SERVICE_CLASSES)
+    vehicle_km.to_csv(results / f'vkt_{stem}{mode}.csv', index=False)
+    per_class = vehicle_km.groupby('vehicle_class')['vkt_km'].sum() / 1e6
+    log.append(f'vkt_{stem}{mode}.csv: million vehicle-km {per_class.round(1).to_dict()}, '
+               f'total {per_class.sum():.1f}')
     totals = summary[summary['component'] == 'CO2(rep)'].groupby('kind')['emission_t'].sum()
     log.append(f'{linesource} (layers {", ".join(layers)}) and summary_{stem}{mode}.csv, '
                f'{time.perf_counter() - start:.1f} s; CO2(rep) t: {totals.round(0).to_dict()}')

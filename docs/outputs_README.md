@@ -7,6 +7,7 @@
 | `linesource_<stem>.gpkg` | Line sources: layer `hot` and layer `cold`, one feature per link piece inside the clip area, with geometry (EPSG:25832), `road_link_id`, `from_node`, `piece`, `road_type`, `scaling_road_type`, `length_km` and one column per `<vehicle class>_<component>` | g/km over the year |
 | `summary_<stem>.csv` | Totals per `kind` (hot, cold), `road_type`, `vehicle_class` and `component` | t over the year |
 | `grid_<name>_<stem>.gpkg` | Gridded emissions on each grid in `outputs.grids`: layers `hot`, `cold` and `total` (hot + cold), one polygon per cell (EPSG:25832) with the cell id and one column per component, summed over the vehicle classes. Every cell of the grid is kept, zeros included | kg over the year |
+| `vkt_<stem>.csv` | Vehicle-km per `road_type`, `level_of_service` and `vehicle_class` (replaces v1 notebook 02) | vehicle-km over the year |
 | `hot_<stem>.parquet`, `cold_<stem>.parquet` | The line-source tables without geometry | g/km over the year |
 | `hot_profile_<stem>.parquet` | Hourly emissions per road type, vehicle class and component (local wall-clock time) | g per hour |
 | `cold_profile_<stem>.parquet` | Hourly cold start emissions per vehicle class and component | g per hour |
@@ -19,6 +20,8 @@ All products add up to the same totals. The sum of g/km × `length_km` over the 
 - **Link pieces:** a link that crosses the clip boundary (VG250, `run.clip_ags`) appears as one piece per part inside it.
 - **Cold starts:** only Access-residential, Local/Collector and Distributor/Secondary links get cold start emissions. The others are 0 in the `cold` layer.
 - **Vehicle classes:** the `hot` layer has PC, LCV, HGV, BUS and MOT. The `cold` layer has PC and LCV.
+- **Vehicle-km:** the `hot` layer and `hot_<stem>.parquet` also have `vkt_<class>`, the vehicle-km per link piece over the year. These columns are not emissions; summary and gridding leave them out.
+- **2025 check:** 5.86 billion vehicle-km (2025 model): PC 4.91, LCV 0.55, HGV 0.29, MOT 0.07, BUS 0.03 billion. 54.5 % of it is in Freeflow.
 
 The size is about 45 MB per run for Munich.
 

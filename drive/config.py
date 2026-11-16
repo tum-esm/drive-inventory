@@ -48,12 +48,6 @@ class VisumConfig(_Strict):
     excluded_typeno: list[tuple[int, int]]  # ranges without road traffic; any other unmatched TYPENO raises
 
 
-class CountsSource(_Strict):
-    """One preprocessed counting data file (detector -> road_link_id matching included)."""
-    source: Literal['BASt', 'LHM']
-    path: Path
-
-
 class LhmIngest(_Strict):
     """LHM detector exports and matched locations, see io.lhm."""
     directory: Path  # folder with the exports
@@ -131,7 +125,6 @@ class BoundariesIngest(_Strict):
 
 
 class IngestConfig(_Strict):
-    counts: list[CountsSource] = []  # interim: v1's preprocessed files
     lhm: LhmIngest | None = None
     bast: BastIngest | None = None
     hbefa: HbefaIngest | None = None
@@ -223,8 +216,6 @@ class DriveConfig(_Strict):
         for m in self.traffic_models.values():
             m.links = root / m.links
             m.zones = root / m.zones
-        for c in self.ingest.counts:
-            c.path = root / c.path
         if self.ingest.bast is not None:
             self.ingest.bast.directory = root / self.ingest.bast.directory
             self.ingest.bast.locations = root / self.ingest.bast.locations

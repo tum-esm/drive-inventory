@@ -14,9 +14,11 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+sys.path.insert(0, str(Path(__file__).parent))
+import v1_inputs
+
 from drive.config import load_config
 from drive.io import lhm
-from drive.io.counts_preprocessed import read_preprocessed_counts
 from drive.io.visum import read_links
 from drive.schemas import COUNT_KEY, HOURS
 
@@ -33,7 +35,7 @@ def main(config_path: str = 'configs/munich_2025.yaml') -> int:
     model_link_ids = {model: set(read_links(c.links, model, c.crs, c.link_columns, config.visum,
                                             config.scaling_road_types)[0]['road_link_id'])
                       for model, c in config.traffic_models.items()}
-    v1, v1_links, _ = read_preprocessed_counts(root / V1_FILE, 'LHM', model_link_ids)
+    v1, v1_links, _ = v1_inputs.read_preprocessed_counts(root / V1_FILE, 'LHM', model_link_ids)
     v1 = v1.drop(columns='flags')
     print(f'v1 preprocessed: {len(v1)} rows, {v1["detector_id"].nunique()} detectors')
 

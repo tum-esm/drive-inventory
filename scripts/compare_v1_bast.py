@@ -13,9 +13,11 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+sys.path.insert(0, str(Path(__file__).parent))
+import v1_inputs
+
 from drive.config import load_config
 from drive.io import bast
-from drive.io.counts_preprocessed import read_preprocessed_counts
 from drive.schemas import COUNT_KEY, HOURS
 
 FILES = ['BAST_CountingStations_daily_2018.csv', 'BAST_TrafficCounts_raw.csv']
@@ -25,7 +27,7 @@ V1_FILE = 'BAST_TrafficCounts_preprocessed_from2018.parquet'
 
 def main(config_path: str = 'configs/munich_2025.yaml') -> int:
     config = load_config(config_path)
-    v1, _, _ = read_preprocessed_counts(config.paths.data_root / FOLDER / V1_FILE, 'BASt', {})
+    v1, _, _ = v1_inputs.read_preprocessed_counts(config.paths.data_root / FOLDER / V1_FILE, 'BASt', {})
     v1 = v1.drop(columns='flags')
     print(f'v1 preprocessed: {len(v1)} rows, {v1["detector_id"].nunique()} detectors, '
           f'{v1["date"].min().date()} to {v1["date"].max().date()}')

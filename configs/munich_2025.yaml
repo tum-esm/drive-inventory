@@ -41,13 +41,6 @@ visum:
     - [900, 999]    # public transport links
 
 ingest:
-  # Preprocessed counting data (outputs of data_preprocessing/11 and 12), 2018-2025.
-  # The *_from2018 files contain the earlier 2019-2025 files unchanged plus 2018.
-  counts:
-    - source: LHM
-      path: restricted_input/counting_data/lhm/MST_TrafficCounts_preprocessed_from2018.parquet
-    - source: BASt
-      path: restricted_input/counting_data/bast/BAST_TrafficCounts_preprocessed_from2018.parquet
   # LHM raw detector exports (quarterly 2019-2024, annual 2018 and 2025) and the QGIS matching of detectors to links
   lhm:
     directory: restricted_input/counting_data/lhm

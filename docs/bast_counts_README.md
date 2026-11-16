@@ -103,7 +103,7 @@ KFZ flags in the Munich files, both directions, 2018: `-` 365,379, `s` 72,396, `
    - It dropped all flag columns (`K_*`).
    - One detector per direction: `detector_id = Zst + '1'` or `'2'`.
    - It mapped the classes, summed the hours to the daily value, set `detector_type = '8+1'` for every row, and joined `road_link_id` from `bast_locations_selected.gpkg`.
-   - The result is `BAST_TrafficCounts_preprocessed*.parquet`, read by `drive ingest counts` (batch 2).
+   - The result is `BAST_TrafficCounts_preprocessed*.parquet`, read by the former interim `drive ingest counts` (batch 2, removed); the compare scripts read it through `scripts/v1_inputs.py`.
 
 ## How v2 reads it
 

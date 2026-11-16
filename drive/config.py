@@ -199,6 +199,12 @@ class CountsQAConfig(_Strict):
     share_min_links: int = 5
 
 
+class SharePool(_Strict):
+    """Vehicle classes whose share is computed over several scaling road types together (spec D30)."""
+    vehicle_classes: list[str]
+    scaling_road_types: list[str]
+
+
 class DriveConfig(_Strict):
     paths: PathsConfig
     traffic_models: dict[TrafficModel, TrafficModelConfig] = {}
@@ -209,9 +215,13 @@ class DriveConfig(_Strict):
     kernel: KernelConfig | None = None
     cold_start: ColdStartConfig | None = None
     scaling_road_types: dict[str, str] = {}  # road type -> scaling road type, unlisted types map to themselves
+    # required with a run section, so that pooling is always stated: [] computes every share per road type
+    vehicle_share_pools: list[SharePool] | None = None
 
     @model_validator(mode='after')
     def _check_and_resolve(self) -> 'DriveConfig':
+        if self.run is not None and self.vehicle_share_pools is None:
+            raise ValueError('vehicle_share_pools must be stated in a config with a run section ([] for no pooling)')
         root = self.paths.data_root
         if not root.is_absolute():
             raise ValueError('paths.data_root must be resolved before validation, use load_config()')

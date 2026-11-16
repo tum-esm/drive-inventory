@@ -185,6 +185,13 @@ counts_qa:
   share_min_days: 30
   share_min_links: 5
 
+# Vehicle classes whose share is computed over several scaling road types together (spec D30). Required in every
+# config with a run section, so that pooling is always explicit; [] computes every share per scaling road type.
+# BUS and MOT: few counters see them on the city roads, and bus volumes depend on the routes. Motorways stay separate.
+vehicle_share_pools:
+  - vehicle_classes: [BUS, MOT]
+    scaling_road_types: [Distributor/Secondary, TrunkRoad/Primary-City]
+
 # Road types with too few counting stations are scaled like Distributor/Secondary
 scaling_road_types:
   Access-residential: Distributor/Secondary

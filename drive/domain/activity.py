@@ -13,11 +13,14 @@ valid and complete for their year (spec R46, D29), so all three use the same cou
 The class itself is unchanged, so that it stays identical to v1 on v1's input.
 - fill_gaps smooths over 5 consecutive (year, ISO week, day type) rows, so the window mixes
   day types and spans about one week, not 5 weeks
+Optional (`share_pools`, spec D30): vehicle classes whose share is computed over several scaling road
+types together, e.g. BUS and MOT over the city road types, where few counters see them and bus
+volumes depend on the routes. Without pools the shares are those of v1.
 Deliberate change: days without data still give zeros in the time profile, but they are
 listed in `missing_days` (v1 swallowed the exception).
 """
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 
 import numpy as np
 import pandas as pd
@@ -27,6 +30,7 @@ from drive.domain.counts_qa import iqr_mean
 from drive.schemas import HOURS, LINK_VEHICLE_CLASSES
 
 VEHICLE_CLASSES = [vc for vc in LINK_VEHICLE_CLASSES if vc != 'SUM']
+_SHARE_LEVELS = ['vehicle_class', 'scaling_road_type', 'date']
 _REQUIRED = ['road_link_id', 'vehicle_class', 'date', 'scaling_road_type', 'day_type',
              'valid', 'complete', 'daily_value'] + HOURS
 
@@ -72,7 +76,8 @@ class Activity:
                  day_types: pd.Series,
                  reference_year: int,
                  reference_day_type: int = 0,
-                 day_groups: Mapping[int, int] | None = None) -> None:
+                 day_groups: Mapping[int, int] | None = None,
+                 share_pools: Sequence[tuple[Sequence[str], Sequence[str]]] = ()) -> None:
         """
         Args:
             link_counts: LINK_COUNTS rows (at least the columns in _REQUIRED)
@@ -81,6 +86,9 @@ class Activity:
             reference_day_type: day type the annual cycle is normalised to
             day_groups: day type -> group for gap filling and hourly profiles. None keeps every
                 day type on its own (v1); the pipeline uses domain.calendar.DAY_GROUPS
+            share_pools: (vehicle classes, scaling road types) pairs: the share of these classes is
+                computed over the counters of all these road types together, see _pool_shares.
+                () computes every share per road type (v1)
 
         Raises:
             ValueError: if columns, vehicle classes or day types are missing
@@ -103,8 +111,18 @@ class Activity:
         if len(uncovered) > 0:
             raise ValueError(f'No day type for {len(uncovered)} dates, e.g. {list(uncovered[:3])}')
         self._day_groups = day_groups
+        self._share_pools = [(list(classes), list(road_types)) for classes, road_types in share_pools]
+        pooled = [(vc, rt) for classes, road_types in self._share_pools for vc in classes for rt in road_types]
+        if len(pooled) != len(set(pooled)):
+            raise ValueError('A vehicle class is pooled twice on the same scaling road type')
+        unknown = {vc for vc, _ in pooled} - set(VEHICLE_CLASSES)
+        if unknown:
+            raise ValueError(f'Unknown vehicle classes in share_pools: {sorted(unknown)}')
         self._day_types = group_day_types(day_types, day_groups)  # references use link_counts['day_type'] instead
 
+        unknown_road_types = {rt for _, road_types in self._share_pools for rt in road_types} - set(self.road_types)
+        if unknown_road_types:
+            raise ValueError(f'share_pools name scaling road types without counts: {sorted(unknown_road_types)}')
         self.vehicle_shares = self._calc_vehicle_shares(link_counts)
         self.annual_cycles = self._calc_annual_cycles(link_counts)
         self.daily_cycles = self._calc_daily_cycles(link_counts)
@@ -118,13 +136,44 @@ class Activity:
         """Share per (vehicle_class, scaling_road_type, date), from complete and valid links."""
         rows = link_counts[link_counts['complete'] & link_counts['valid'] &
                            link_counts['vehicle_class'].isin(VEHICLE_CLASSES)]
-        median = rows.groupby(['vehicle_class', 'scaling_road_type', 'date'])['daily_value'].median()
+        shares = self._median_shares(rows, 'scaling_road_type')
+        for classes, road_types in self._share_pools:
+            shares = self._pool_shares(shares, rows, classes, road_types)
+        return shares.sort_index().rename('share')
+
+    def _median_shares(self, rows: pd.DataFrame, group: str | pd.Series) -> pd.Series:
+        """Median daily volume per class over the links of a group, gap-filled, divided by the sum over the classes."""
+        keys = [rows['vehicle_class'], rows[group] if isinstance(group, str) else group, rows['date']]
+        median = rows['daily_value'].groupby(keys).median()
+        median.index.names = _SHARE_LEVELS
         median = fill_gaps(median, self._day_types)
         total = median.groupby(level=['scaling_road_type', 'date']).sum()
-        shares = median / total
         # pandas-stubs only accepts level positions, pandas also takes names
-        shares = shares.reorder_levels(['vehicle_class', 'scaling_road_type', 'date'])  # pyright: ignore[reportArgumentType]
-        return shares.sort_index().rename('share')
+        return (median / total).reorder_levels(_SHARE_LEVELS)  # pyright: ignore[reportArgumentType]
+
+    def _pool_shares(self, shares: pd.Series, rows: pd.DataFrame, classes: list[str], road_types: list[str]) -> pd.Series:
+        """Replaces the shares of `classes` on `road_types` by their share over the links of all these road types.
+
+        The pooled share comes from the medians over the pooled links, like a road type's own share. The
+        other classes keep their road type's shares, scaled so that the shares of a day add up to 1 again.
+        """
+        in_pool = rows['scaling_road_type'].isin(road_types)
+        pool = self._median_shares(rows[in_pool], pd.Series('pool', index=rows.index)[in_pool])
+        pooled = pool[pool.index.get_level_values('vehicle_class').isin(classes)].droplevel('scaling_road_type')
+        pooled_sum = pooled.groupby(level='date').sum()
+        parts = []
+        for road_type, own in shares.groupby(level='scaling_road_type'):
+            if road_type not in road_types:
+                parts.append(own.reorder_levels(_SHARE_LEVELS))  # pyright: ignore[reportArgumentType]
+                continue
+            own = own.droplevel('scaling_road_type')
+            others = own[~own.index.get_level_values('vehicle_class').isin(classes)]
+            dates = others.index.get_level_values('date')
+            scale = (1 - pooled_sum.reindex(dates).to_numpy()) / others.groupby(level='date').transform('sum')
+            mine = pooled[pooled.index.get_level_values('date').isin(dates.unique())]
+            part = pd.concat({road_type: pd.concat([others * scale.to_numpy(), mine])}, names=['scaling_road_type'])
+            parts.append(part.reorder_levels(_SHARE_LEVELS))  # pyright: ignore[reportArgumentType]
+        return pd.concat(parts)
 
     def _calc_annual_cycles(self, link_counts: pd.DataFrame) -> pd.Series:
         """Daily scaling per (scaling_road_type, date): SUM volumes normalised per link to the

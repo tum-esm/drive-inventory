@@ -65,7 +65,7 @@ The class fields are rounded to whole vehicles, while `SUMME_KFZ` isn't. So PC +
 For every day the kernel (`drive/domain/kernel.py`) does the following:
 
 1. It scales the link's model volume `dtv_SUM` with the daily factor of its scaling road type.
-2. It splits the scaled volume with the counted vehicle shares of that scaling road type and day. These shares are the median volume per class over the complete and valid counted links, divided by the sum over the classes (`Activity.vehicle_shares`).
+2. It splits the scaled volume with the counted vehicle shares of that scaling road type and day. These shares are the median volume per class over the complete and valid counted links, divided by the sum over the classes (`Activity.vehicle_shares`). BUS and MOT are pooled over the city road types, see [Pooled BUS and MOT shares](#pooled-bus-and-mot-shares).
 3. It applies the share corrections per link:
 
 ```text
@@ -135,6 +135,54 @@ Some detectors count LCV far off. The counts QA removes those link-years, see [I
 | LCV CO2(rep) | −37.5 | −37.8 | −37.9 | −37.9 | −37.9 | −37.9 | −38.0 | −34.5 |
 | PC CO2(rep) | +7.2 | +6.5 | +7.4 | +7.7 | +7.5 | +7.5 | +7.1 | +6.4 |
 | NOx LCV | −37.6 | −38.0 | −38.0 | −38.0 | −38.0 | −38.0 | −38.1 | −34.3 |
+
+## Pooled BUS and MOT shares
+
+Since spec D30, the BUS and MOT shares of Distributor/Secondary and TrunkRoad/Primary-City are computed over the counters of both road types together. Motorways keep their own shares. The pooling is set explicitly in the config, and every config with a run section must state it (`[]` for none):
+
+```yaml
+vehicle_share_pools:
+  - vehicle_classes: [BUS, MOT]
+    scaling_road_types: [Distributor/Secondary, TrunkRoad/Primary-City]
+```
+
+**Method** (`Activity._pool_shares`):
+
+1. The pooled share is computed like a road type's own share: the median volume per class over all counters of the pool, divided by the sum over the classes.
+2. On each pooled road type, BUS and MOT take the pooled shares.
+3. PC, LCV and HGV keep their road type's own shares, scaled so that the shares of a day add up to 1 again. Their ratios to each other don't change.
+
+**Why:**
+
+- Few counters see BUS and MOT on the city roads. TrunkRoad/Primary-City has 3–6 usable counters per year.
+- Buses run on routes, so the BUS volume per counter varies by up to 4.5 times the median.
+- The median over a few counters therefore jumped whenever one entered or left. Before pooling, the TrunkRoad BUS share swung between 0.15 % and 0.44 % from year to year.
+- BUS gives about 5 % of hot NOx. MOT gives about 13 % of PM10 exhaust and 15 % of CO.
+
+Year-to-year coefficient of variation of the annual mean share, visum2025 counters 2019–2025:
+
+| | BUS before | BUS pooled | MOT before | MOT pooled |
+|---|---|---|---|---|
+| Distributor/Secondary | 0.22 | 0.16 | 0.06 | 0.07 |
+| TrunkRoad/Primary-City | 0.37 | 0.16 | 0.18 | 0.07 |
+
+The pool is dominated by the Distributor counters, which outnumber the TrunkRoad counters about 5 to 1. On TrunkRoad/Primary-City the BUS share rises from about 0.25 % to 0.7 %, and the MOT share from about 0.8 % to 1.6 %.
+
+**Effect (series 2018–2025 against `v2.7-completeness`):**
+
+| | Change |
+|---|---|
+| Hot CO2(rep), all classes | −0.29 to +0.19 % |
+| BUS, 2019–2025 | 0 to +11 % |
+| BUS, 2018 | −32 % (only 4 usable counters in the pool, spec R47) |
+| MOT, 2019–2023 | +10 to +14 % |
+| MOT, 2024 | 0 % |
+| MOT, 2025 | +7 % |
+| Cold | within 0.2 % |
+
+Baseline: `data/inventory/baselines/v2.8-pooledbusmot`.
+
+A further step would be bus volumes per link from the public transport timetable (GTFS). That would place buses on the roads where they run, instead of spreading them over every link in proportion to car traffic.
 
 ## Implausible class shares
 
@@ -221,6 +269,7 @@ Cold starts are computed for PC and LCV from the model's daily starts per zone a
 - `scripts/check_link_shares.py [config] [scaling_road_type]`: counted vs model volumes and shares per counted link
 - `tests/test_counts_qa.py`: the share check removes only the faulty class and year of a link
 - `tests/test_kernel.py`: the class split by hand, with and without the HGV cap
+- `tests/test_activity.py`: pooled BUS and MOT shares, by hand
 - `scripts/compare_v1_hot.py`: checks the kernel exactly against v1. It passes `classes=('HGV', 'LCV')` to `share_corrections` to reproduce v1's corrections.
 
 ## Sources

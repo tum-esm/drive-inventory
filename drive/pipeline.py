@@ -164,8 +164,9 @@ def load_activity(config: DriveConfig) -> tuple[Activity, QAReport, int]:
     run, _ = _require(config)
     link_counts, report, version = load_link_counts(config)
     usable = link_counts[link_counts['valid'] & link_counts['complete']].reset_index(drop=True)
+    pools = [(p.vehicle_classes, p.scaling_road_types) for p in config.vehicle_share_pools or []]
     activity = Activity(usable, load_day_types(config, version), run.reference_year, run.reference_day_type,
-                        DAY_GROUPS)
+                        DAY_GROUPS, pools)
     return activity, report, version
 
 

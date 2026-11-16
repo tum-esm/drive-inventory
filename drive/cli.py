@@ -305,6 +305,23 @@ def _run(args: argparse.Namespace) -> int:
     return 0
 
 
+def _dashboard(args: argparse.Namespace) -> int:
+    """Starts the local dashboard (dashboard/app.py, spec D33); needs `uv sync --group dashboard`."""
+    import importlib.util
+    import subprocess
+    from pathlib import Path
+
+    if importlib.util.find_spec('streamlit') is None:
+        print('The dashboard needs its dependencies: uv sync --group dashboard', file=sys.stderr)
+        return 1
+    app = Path(__file__).resolve().parent.parent / 'dashboard' / 'app.py'
+    if not app.exists():
+        print(f'{app} not found; the dashboard runs from a checkout of the repository', file=sys.stderr)
+        return 1
+    load_config(args.config)  # fail early on an invalid config
+    return subprocess.call([sys.executable, '-m', 'streamlit', 'run', str(app), '--', str(Path(args.config).resolve())])
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog='drive', description='DRIVE road transport emission inventory')
     parser.add_argument('--version', action='version', version=f'drive {__version__}')
@@ -341,6 +358,9 @@ def main(argv: list[str] | None = None) -> int:
     meteo.add_argument('config', help='path to the run configuration (YAML)')
     meteo.set_defaults(func=_ingest_meteo)
 
+    dashboard = commands.add_parser('dashboard', help='start the local dashboard (needs uv sync --group dashboard)')
+    dashboard.add_argument('config', help='path to the run configuration (YAML)')
+    dashboard.set_defaults(func=_dashboard)
     compute = commands.add_parser('run', help='compute the hot and cold start emissions of a run')
     compute.add_argument('config', help='path to the run configuration (YAML)')
     compute.set_defaults(func=_run)

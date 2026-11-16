@@ -75,6 +75,25 @@ A run of one year takes about 40 s. It writes, to `data/inventory/v2/`:
 
 See [docs/outputs_README.md](docs/outputs_README.md) for units and details.
 
+### Dashboard
+
+A local Streamlit app shows the inputs and results of the runs in the store and the series folder. It is read-only and meant for the group on a local machine; it publishes nothing.
+
+```bash
+uv sync --group dashboard                                  # once: Streamlit, Plotly
+uv run --group dashboard drive dashboard configs/munich_2025.yaml
+```
+
+| Tab | Content |
+|---|---|
+| Input map | VISUM links coloured by road type, width by total daily volume; all counters at their matched link |
+| Scaling | Annual scaling profile per road type with a time-span slider; diurnal cycles per year, month, day type and vehicle class |
+| Vehicle-km | Vehicle-km per year and class; level-of-service shares |
+| Emission map | Line sources or grid cells of one run, hot / cold / total, colour and width by emission |
+| Emission totals | Totals per year for one component, split by hot / cold, vehicle class or road type |
+
+The maps need an internet connection for the base map tiles. The scaling tab runs the counts QA of the chosen traffic model once (about 10 s); the other tabs read the files of `scripts/run_series.py`.
+
 ### Documentation
 
 | Page | Content |

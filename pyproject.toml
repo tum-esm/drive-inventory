@@ -38,6 +38,10 @@ build-backend = "hatchling.build"
 packages = ["drive"]
 
 [dependency-groups]
+dashboard = [
+    "plotly>=7.1.0",
+    "streamlit>=1.67.0",
+]
 dev = [
     "pandas-stubs>=3.1.0.261029",
     "pyright[nodejs]>=1.1.414",
@@ -51,7 +55,7 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 120
 target-version = "py313"
-include = ["drive/**/*.py", "tests/**/*.py", "scripts/**/*.py"]
+include = ["drive/**/*.py", "tests/**/*.py", "scripts/**/*.py", "dashboard/**/*.py"]
 
 [tool.pyright]
 include = ["drive"]

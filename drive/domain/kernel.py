@@ -8,7 +8,8 @@ such group before the factors are applied.
 
 Behaviour kept from v1 for comparability (spec §5):
 - the hot ambient pattern is fixed (R33 in the backlog)
-- a negative share correction `k` gives negative volumes; they are counted, not clamped
+Deliberate change (spec D27, R45): corrected HGV is capped at the link's total and the other classes at
+zero, so no volume is negative; v1 let `k` go negative (`KernelParams.cap_shares = False`).
 """
 
 from dataclasses import dataclass
@@ -35,6 +36,7 @@ class KernelParams:
     car_unit_factors: dict[str, float]
     vcr_thresholds: dict[str, tuple[float, ...]]  # road type -> ascending VCR limits of the LOS classes
     area_type: str = 'Urban'
+    cap_shares: bool = True  # cap corrected HGV at the total and k at 0 (D27); False reproduces v1
 
 
 @dataclass(frozen=True)
@@ -50,7 +52,8 @@ class EfTable:
 class HotEmissions:
     emissions: pd.DataFrame  # g/km per link, columns <vehicle class>_<component>, index as `links`
     annual_volume: np.ndarray  # vehicles per [link, LOS, vehicle class]
-    negative_volume_links: int
+    negative_volume_links: int  # links with a negative annual volume in some LOS class and vehicle class (v1 only)
+    capped_links: int  # links on which the HGV cap acted on at least one day (D27)
     # weight name -> weighted emissions per [hour, road type, vehicle class, component]
     profiles: dict[str, np.ndarray]
 
@@ -96,22 +99,38 @@ def daily_volumes(dtv_day: np.ndarray,
                   shares: np.ndarray,
                   hgv_corr: np.ndarray,
                   lcv_corr: np.ndarray,
-                  vehicle_classes: list[str]) -> np.ndarray:
+                  vehicle_classes: list[str],
+                  cap: bool = True) -> np.ndarray:
     """Daily volume per [link, vehicle class].
 
     HGV and LCV are corrected per link, and all other classes get the factor `k` that keeps the
-    total unchanged.
+    total unchanged. With `cap`, the corrected HGV share is capped at 1 and the corrected LCV share
+    at what HGV leaves, so `k` >= 0 and no class gets a negative volume (D27). Without it (v1), `k`
+    turns negative when the corrected HGV and LCV shares add up to more than 1.
 
     Args:
         dtv_day: scaled daily volume per link
         shares: counted share per [link, vehicle class]
         hgv_corr, lcv_corr: see share_corrections
+        cap: see above
     """
     hgv, lcv = vehicle_classes.index('HGV'), vehicle_classes.index('LCV')
-    k = (1 - hgv_corr * shares[:, hgv] - lcv_corr * shares[:, lcv]) / (1 - shares[:, hgv] - shares[:, lcv])
+    hgv_share, lcv_share = hgv_corr * shares[:, hgv], lcv_corr * shares[:, lcv]
+    if cap:
+        hgv_share = np.minimum(hgv_share, 1.0)
+        lcv_share = np.minimum(lcv_share, 1.0 - hgv_share)
+    rest = 1 - shares[:, hgv] - shares[:, lcv]
+    k = (1 - hgv_share - lcv_share) / rest
     factors = np.repeat(k[:, None], len(vehicle_classes), axis=1)
-    factors[:, hgv], factors[:, lcv] = hgv_corr, lcv_corr
-    return dtv_day[:, None] * shares * factors
+    volumes = dtv_day[:, None] * shares * factors
+    volumes[:, hgv], volumes[:, lcv] = dtv_day * hgv_share, dtv_day * lcv_share
+    return volumes
+
+
+def capped_links(shares: np.ndarray, hgv_corr: np.ndarray, lcv_corr: np.ndarray, vehicle_classes: list[str]) -> np.ndarray:
+    """True per link where the corrected HGV and LCV shares add up to more than 1, i.e. where `cap` acts."""
+    hgv, lcv = vehicle_classes.index('HGV'), vehicle_classes.index('LCV')
+    return hgv_corr * shares[:, hgv] + lcv_corr * shares[:, lcv] > 1
 
 
 def los_classes(pcu: np.ndarray, capacity: np.ndarray, thresholds: np.ndarray) -> np.ndarray:
@@ -253,6 +272,7 @@ def hot_emissions(links: pd.DataFrame,
     link_offset = np.arange(n)[:, None] * N_LOS
 
     annual = np.zeros((n * N_LOS, len(vehicles)))
+    capped = np.zeros(n, dtype=bool)
     n_groups = len(ef.by_group)
     group_offset = ef.group_of_link[:, None] * N_LOS
     hour_offset = np.arange(24)[None, :] * n_groups * N_LOS
@@ -262,7 +282,9 @@ def hot_emissions(links: pd.DataFrame,
 
     for d, date in enumerate(dates):
         scaling, shares, cycle = _day_inputs(activity, date, road_types, vehicles)
-        day = daily_volumes(dtv * scaling[road_type_codes], shares[road_type_codes], hgv_corr, lcv_corr, vehicles)
+        day = daily_volumes(dtv * scaling[road_type_codes], shares[road_type_codes], hgv_corr, lcv_corr, vehicles,
+                            params.cap_shares)
+        capped |= capped_links(shares[road_type_codes], hgv_corr, lcv_corr, vehicles)
         hourly = day[:, None, :] * cycle[None, :, :]
         los = los_classes(hourly @ car_units, capacity, thresholds)
         positions = (link_offset + los).ravel()
@@ -284,6 +306,7 @@ def hot_emissions(links: pd.DataFrame,
     return HotEmissions(emissions=pd.DataFrame(emissions.reshape(n, -1), index=links.index, columns=columns),
                         annual_volume=volume,
                         negative_volume_links=int((volume < 0).any(axis=(1, 2)).sum()),
+                        capped_links=int(capped.sum()),
                         profiles=profiles)
 
 

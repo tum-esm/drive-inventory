@@ -8,7 +8,9 @@ Usage: uv run python scripts/compare_v1_hot.py [configs/munich_2025.yaml]
    kernel's own share corrections (with v1's LCV correction, D25) are compared with the baseline's as a separate check.
    The hourly profile with v1's definition must match v1's hourly worker on sample days.
 2. Full chain from the store (reported): totals per component, vehicle class and road type in % of the
-   baseline. v2 differs on purpose: VG250 clip area (R23), counts from the raw ingests, store calendar (D22).
+   baseline. v2 differs on purpose: VG250 clip area (R23), counts from the raw ingests, store calendar (D22),
+   counted LCV shares without lcv_corr (D25),
+   HGV capped at the link total (D27; the checks on v1's inputs run without the cap).
    Until those switches the chain matched the baseline row by row within 0.01 % (commit 6cd20b5).
 3. Aggregated mode: the kernel on v1's inputs against v1's aggregated line source (pass/fail), and the chain
    from the store (reported). It doesn't use gradients, so the v1.1-asis file is still valid.
@@ -16,6 +18,7 @@ Usage: uv run python scripts/compare_v1_hot.py [configs/munich_2025.yaml]
 
 import sys
 import time
+from dataclasses import replace
 from pathlib import Path
 
 import geopandas as gpd
@@ -160,7 +163,7 @@ def totals_frame(emissions: pd.DataFrame, road_type: pd.Series, length_km: np.nd
 def check_chain(config, baseline: gpd.GeoDataFrame) -> None:
     run = compute_hot_emissions(config)
     print(', '.join(f'{stage} {value:.1f} s' for stage, value in run.seconds.items()) +
-          f'; store batch {run.version}; links with negative volumes: {run.hot.negative_volume_links}')
+          f'; store batch {run.version}; links with the HGV cap: {run.hot.capped_links}')
     print(f'Link pieces: {len(run.links)} in v2 (VG250), {len(baseline)} in the baseline (v1 boundary)')
     columns = run.hot.emissions.columns
     new = totals_frame(run.hot.emissions, run.links['road_type'], run.links.length.to_numpy() / 1000)
@@ -214,7 +217,7 @@ def check_aggregated(config, params) -> bool:
 
 def main(config_path: str = 'configs/munich_2025.yaml') -> int:
     config = load_config(config_path)
-    params = kernel_params(config)
+    params = replace(kernel_params(config), cap_shares=False)  # v1 let k go negative (D27)
     baseline = gpd.read_file(config.paths.data_root / BASELINE)
 
     print('1. Kernel on v1 inputs')

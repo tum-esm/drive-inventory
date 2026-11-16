@@ -354,7 +354,12 @@ def run_inventory(config: DriveConfig) -> list[str]:
         .to_csv(results / f'hot_timeprofile_{stem}{mode}.csv', index=False)
     timing = ', '.join(f'{stage} {value:.1f} s' for stage, value in hot.seconds.items())
     log += [f'{results / f"hot_{stem}{mode}.parquet"}: {len(table)} rows, store batch {hot.version}',
-            f'Time: {timing}; links with negative volumes: {hot.hot.negative_volume_links}']
+            f'Time: {timing}; links with the HGV cap (k < 0 without it, D27): {hot.hot.capped_links}']
+    outliers = hot.report.share_outliers
+    if outliers is not None:
+        removed = ', '.join(f'{c} {len(g)} link-years on {g["road_link_id"].nunique()} links'
+                            for c, g in outliers.groupby('vehicle_class'))
+        log.append(f'Implausible class shares removed (counts QA): {removed or "none"}')
 
     if config.cold_start is not None:
         start = time.perf_counter()

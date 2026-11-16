@@ -113,3 +113,20 @@ def test_vehicle_split_keeps_the_total():
     assert dict(zip(vehicles, volumes[0])) == pytest.approx(
         {'PC': 656.25, 'LCV': 50.0, 'HGV': 200.0, 'BUS': 46.875, 'MOT': 46.875})
     assert volumes.sum() == pytest.approx(1000.0)
+
+
+def test_daily_volumes_cap_hgv_at_the_total():
+    """A link the model gives 95 % HGV, on a day with a counted HGV share above the reference (D27).
+
+    1000 vehicles, counted shares PC 0.80, LCV 0.10, HGV 0.10; hgv_corr 9.5, lcv_corr 1:
+        uncapped HGV share 9.5 x 0.10 = 0.95, LCV 0.10 -> 1.05 > 1, k = (1 - 1.05) / 0.8 < 0 (v1)
+        capped: HGV 950, LCV min(0.10, 1 - 0.95) = 0.05 -> 50, PC 0
+    Catches negative volumes coming back and a cap that loses or adds traffic.
+    """
+    vehicles = ['PC', 'LCV', 'HGV']
+    shares = np.array([[0.80, 0.10, 0.10]])
+    capped = daily_volumes(np.array([1000.0]), shares, np.array([9.5]), np.array([1.0]), vehicles)
+    v1 = daily_volumes(np.array([1000.0]), shares, np.array([9.5]), np.array([1.0]), vehicles, cap=False)
+
+    assert dict(zip(vehicles, capped[0])) == pytest.approx({'PC': 0.0, 'LCV': 50.0, 'HGV': 950.0})
+    assert v1[0, 0] < 0 and v1.sum() == pytest.approx(1000.0)

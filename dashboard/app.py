@@ -10,6 +10,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import pydeck as pdk
 import streamlit as st
 
@@ -80,6 +81,31 @@ def grid_layer_data(stem: str, grid_name: str, kind: str, component: str) -> pd.
     polygons = [[[x, y] for x, y, *_ in geometry.exterior.coords] for geometry in frame.geometry]
     return pd.DataFrame({'polygon': polygons, 'value': frame['value'].round(2),
                          'colour': data.colour_scale(frame['value'].to_numpy()).tolist()})
+
+
+BAR_WIDTH, BAR_HEIGHT = 900, 450  # pixels, so that year-to-year differences stay visible on wide screens
+
+
+def tonnes(value: float, scale: float) -> str:
+    """Tonnes in t, kt or Mt depending on the scale of the chart."""
+    if scale >= 1e6:
+        return f'{value / 1e6:.2f} Mt'
+    if scale >= 1e3:
+        return f'{value / 1e3:.1f} kt'
+    return f'{value:.1f} t'
+
+
+def with_totals(figure, totals: pd.DataFrame, x: str, y: str, labels: list[str], lowest: float = 0.0):
+    """Writes the total of each stacked bar above it.
+
+    Args:
+        lowest: the lowest stacked value (sum of the negative parts, e.g. cold excess NOx), so it stays visible
+    """
+    figure.add_trace(go.Scatter(x=totals[x], y=totals[y], text=labels, mode='text', textposition='top center',
+                                showlegend=False, hoverinfo='skip', cliponaxis=False))
+    top = max(totals[y].max(), 0.0)
+    figure.update_yaxes(range=[min(lowest * 1.1, 0.0), top * 1.12 if top > 0 else 1.0])
+    return figure
 
 
 def deck(layers: list, tooltip: dict) -> pdk.Deck:
@@ -156,14 +182,19 @@ with tabs[2]:
         per_class['billion vehicle-km'] = per_class['vkt_km'] / 1e9
         figure = px.bar(per_class.sort_values('year'), x='run', y='billion vehicle-km', color='vehicle_class',
                         title='Vehicle-km per year and vehicle class', labels={'run': ''})
-        st.plotly_chart(figure, width='stretch', alt='Vehicle-km per year and vehicle class')
+        total = per_class.groupby('run', as_index=False)['billion vehicle-km'].sum()
+        with_totals(figure, total, 'run', 'billion vehicle-km', [f'{v:.2f}' for v in total['billion vehicle-km']])
+        st.plotly_chart(figure, width=BAR_WIDTH, height=BAR_HEIGHT, alt='Vehicle-km per year and vehicle class')
         los = vkt.groupby(['run', 'year', 'level_of_service'], as_index=False)['vkt_km'].sum()
         los['share'] = los['vkt_km'] / los.groupby('run')['vkt_km'].transform('sum') * 100
         order = ['Freeflow', 'Heavy', 'Satur.', 'St+Go', 'St+Go2']
         figure = px.bar(los.sort_values('year'), x='run', y='share', color='level_of_service',
                         category_orders={'level_of_service': order}, title='Level-of-service share of vehicle-km',
                         labels={'share': '% of vehicle-km', 'run': ''}, text_auto='.0f')
-        st.plotly_chart(figure, width='stretch', alt='Level-of-service share of vehicle-km per year')
+        # labels only where they fit; thin segments (St+Go2, about 1 %) would overlap
+        figure.update_traces(textposition='inside', insidetextanchor='middle')
+        figure.update_layout(uniformtext_minsize=10, uniformtext_mode='hide')
+        st.plotly_chart(figure, width=BAR_WIDTH, height=BAR_HEIGHT, alt='Level-of-service share of vehicle-km per year')
 
 # ---- (4) emission map ----
 with tabs[3]:
@@ -217,7 +248,13 @@ with tabs[4]:
         totals = sel.groupby(['run', 'year', colour], as_index=False)['emission_t'].sum().sort_values('year')
         figure = px.bar(totals, x='run', y='emission_t', color=colour,
                         title=f'{component}: total emissions per year (t)', labels={'emission_t': 't', 'run': ''})
-        st.plotly_chart(figure, width='stretch', alt='Total emissions of the selected component per year')
+        total = totals.groupby('run', as_index=False, sort=False)['emission_t'].sum()
+        scale = total['emission_t'].abs().max()
+        negative = totals[totals['emission_t'] < 0].groupby('run')['emission_t'].sum()
+        with_totals(figure, total, 'run', 'emission_t', [tonnes(v, scale) for v in total['emission_t']],
+                    lowest=float(negative.min()) if len(negative) else 0.0)
+        st.plotly_chart(figure, width=BAR_WIDTH, height=BAR_HEIGHT,
+                        alt='Total emissions of the selected component per year')
         table = sel.pivot_table(index='run', columns='kind', values='emission_t', aggfunc='sum')
         table['total'] = table.sum(axis=1)
         st.dataframe(table.round(1), width='stretch')

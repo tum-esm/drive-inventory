@@ -1,14 +1,14 @@
 """Quality control of traffic counts per road link (port of v1 data_preprocessing/31).
 
 Steps: aggregate detectors per link, add road and day types, check hourly vs daily
-consistency, remove outliers, validate against the traffic model (SQV) and flag
-completeness in the reference window.
+consistency, remove outliers, remove implausible class shares, validate against the traffic
+model (SQV) and flag completeness in the reference window.
 
 Behaviour kept from v1 for comparability (candidates for later method decisions):
 - missing detector values on a link-day are summed as 0
 - outliers are detected per (link, vehicle class, day type group) over all years at once
-Deliberate change: links without data in the completeness window are incomplete (R3),
-v1 marked them complete.
+Deliberate changes: links without data in the completeness window are incomplete (R3), v1
+marked them complete. Implausible class shares are removed per link and year (R44, not in v1).
 """
 
 from collections.abc import Mapping
@@ -37,6 +37,10 @@ class QAParams:
     iqr_range: tuple[float, float] = (2.5, 97.5)
     scaling_road_types: dict[str, str] = field(default_factory=dict)
     outlier_groups: Mapping[int, int] | None = None  # outlier groups, None keeps every day type on its own (v1)
+    share_check_classes: tuple[str, ...] = ()  # classes checked by _drop_share_outliers; () skips the step (v1)
+    share_z_threshold: float = 3.5
+    share_min_days: int = 30  # link-years with fewer days with a class split are not checked
+    share_min_links: int = 5  # groups with fewer link-years are not checked
 
 
 @dataclass
@@ -47,6 +51,7 @@ class QAReport:
     links_valid: int = 0
     links_complete: int = 0
     links_without_window_data: list[int] = field(default_factory=list)  # R3: incomplete in v2, complete in v1
+    share_outliers: pd.DataFrame | None = None  # link-years whose class counts were removed, see _drop_share_outliers
 
 
 def iqr_mean(values: np.ndarray, iqr_range: tuple[float, float] = (2.5, 97.5)) -> float:
@@ -127,6 +132,59 @@ def _drop_outliers(volume: pd.DataFrame,
     return volume[~outlier], int(outlier.sum())
 
 
+def class_shares(volume: pd.DataFrame, classes: tuple[str, ...], min_days: int = 1) -> pd.DataFrame:
+    """Annual share of each class in SUM per link, over the days on which both are counted.
+
+    Returns:
+        pd.DataFrame: road_link_id, scaling_road_type, year, vehicle_class, days, share
+    """
+    daily = volume.pivot_table(index=['road_link_id', 'scaling_road_type', 'date'], columns='vehicle_class',
+                               values='daily_value', aggfunc='sum')
+    rows = []
+    for vehicle_class in classes:
+        if vehicle_class not in daily or 'SUM' not in daily:
+            continue
+        both = daily[['SUM', vehicle_class]].dropna()
+        both = both.assign(year=pd.DatetimeIndex(both.index.get_level_values('date')).year)
+        annual = both.groupby(['road_link_id', 'scaling_road_type', 'year']) \
+            .agg(counted=(vehicle_class, 'sum'), total=('SUM', 'sum'), days=('SUM', 'size'))
+        annual = annual[annual['days'] >= min_days]
+        rows.append(annual.assign(vehicle_class=vehicle_class, share=annual['counted'] / annual['total']).reset_index())
+    columns = ['road_link_id', 'scaling_road_type', 'year', 'vehicle_class', 'days', 'share']
+    return pd.concat(rows)[columns] if rows else pd.DataFrame(columns=columns)
+
+
+def _drop_share_outliers(volume: pd.DataFrame, params: QAParams) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Removes a class's counts on links whose annual share of that class is implausible (R44).
+
+    Detectors classify vehicles by length and shape, and a faulty or misconfigured detector can count a
+    class far off while SUM stays right (e.g. a BASt station with 26 % LCV against about 11 % on the
+    other motorways). The annual share of each class in `share_check_classes` is compared with the
+    other links of the same scaling road type and year: a robust z-score of the log share (median and
+    MAD, as for the daily outliers) above `share_z_threshold` removes that class on the link for the
+    year. SUM and the other classes stay. Log shares make a share half and double the median equally
+    far off. HGV is not checked by default: its shares differ between links for real (2-25 %).
+
+    Returns:
+        volume without the removed rows, and the removed link-years with share, ratio to the median and z
+    """
+    shares = class_shares(volume, params.share_check_classes, params.share_min_days)
+    shares = shares[shares['share'] > 0].copy()
+    keys = ['scaling_road_type', 'year', 'vehicle_class']
+    log_share = pd.Series(np.log(shares['share'].to_numpy(dtype=float)), index=shares.index)
+    median = log_share.groupby([shares[k] for k in keys]).transform('median')
+    mad = (log_share - median).abs().groupby([shares[k] for k in keys]).transform('median')
+    size = log_share.groupby([shares[k] for k in keys]).transform('size')
+    shares['ratio_to_median'] = np.exp((log_share - median).to_numpy())
+    shares['z'] = 0.6745 * (log_share - median) / mad
+    flagged = shares[(size >= params.share_min_links) & (shares['z'].abs() > params.share_z_threshold)]
+
+    year = volume['date'].dt.year
+    drop = pd.MultiIndex.from_frame(flagged[['road_link_id', 'year', 'vehicle_class']])
+    rows = pd.MultiIndex.from_arrays([volume['road_link_id'], year, volume['vehicle_class']])
+    return volume[~rows.isin(drop)], flagged.reset_index(drop=True)
+
+
 def qa_link_counts(volume: pd.DataFrame,
                    link_attributes: pd.DataFrame,
                    params: QAParams) -> tuple[pd.DataFrame, QAReport]:
@@ -153,6 +211,11 @@ def qa_link_counts(volume: pd.DataFrame,
     volume, report.outliers = _drop_outliers(volume, params.outlier_z_threshold, params.outlier_groups)
     report.rows['without_outliers'] = len(volume)
     volume = volume.copy()
+    volume['scaling_road_type'] = volume['road_type'].map(lambda rt: params.scaling_road_types.get(str(rt), rt))
+
+    if params.share_check_classes:
+        volume, report.share_outliers = _drop_share_outliers(volume, params)
+        report.rows['without_share_outliers'] = len(volume)
 
     # validity: SQV of the reference-year normweekday mean against the model DTV
     reference = volume[(volume['date'].dt.year == params.reference_year) &
@@ -176,8 +239,6 @@ def qa_link_counts(volume: pd.DataFrame,
     completeness = days / days.max()
     volume['completeness'] = volume['road_link_id'].map(completeness).fillna(0.0)
     volume['complete'] = volume['completeness'] > params.completeness_threshold  # R3: 0 is incomplete
-
-    volume['scaling_road_type'] = volume['road_type'].map(lambda rt: params.scaling_road_types.get(str(rt), rt))
 
     links = volume.groupby('road_link_id')[['valid', 'complete', 'completeness']].first()
     report.links = len(links)

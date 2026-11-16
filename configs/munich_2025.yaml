@@ -173,6 +173,12 @@ counts_qa:
   sqv_threshold: 0.6
   completeness_threshold: 0.6
   iqr_range: [2.5, 97.5]
+  # implausible class shares per link and year (spec R44, docs/vehicle_classes_README.md): a class's annual share on a
+  # link is compared with the other links of its scaling road type in that year (robust z of the log share)
+  share_check_classes: [LCV]
+  share_z_threshold: 3.5
+  share_min_days: 30
+  share_min_links: 5
 
 # Road types with too few counting stations are scaled like Distributor/Secondary
 scaling_road_types:

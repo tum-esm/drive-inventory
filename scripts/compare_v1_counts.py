@@ -7,8 +7,8 @@ compared with v1 TrafficCounts on the same input. It must be identical.
 
 Reported, not checked: the counts QA (data_preprocessing/31 -> counting_data_combined.parquet) and the full
 chain (store -> QA -> Activity) against v1 for both periods. v2 now differs from v1 on purpose: counts from
-the raw exports and archives (BASt 2021-2022 raw instead of annual, flags), the store calendar (D22) and R3
-(links without data in the completeness window are incomplete). Until the switch to the raw ingests, the only
+the raw exports and archives (BASt 2021-2022 raw instead of annual, flags), the store calendar (D22), R3
+(links without data in the completeness window are incomplete) and the class-share check (R44). Until the switch to the raw ingests, the only
 differences were R3 and BASt's -1 markers (commit cc324e9).
 """
 

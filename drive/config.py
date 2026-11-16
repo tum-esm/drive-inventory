@@ -188,6 +188,12 @@ class CountsQAConfig(_Strict):
     sqv_threshold: float = 0.6
     completeness_threshold: float = 0.6
     iqr_range: tuple[float, float] = (2.5, 97.5)
+    # implausible class shares per link and year (R44): classes to check, robust z of the log annual share within
+    # scaling road type and year; [] skips the check (v1)
+    share_check_classes: list[str] = []
+    share_z_threshold: float = 3.5
+    share_min_days: int = 30
+    share_min_links: int = 5
 
 
 class DriveConfig(_Strict):

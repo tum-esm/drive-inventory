@@ -136,7 +136,11 @@ def load_link_counts(config: DriveConfig) -> tuple[pd.DataFrame, QAReport, int]:
                       completeness_threshold=qa.completeness_threshold,
                       iqr_range=qa.iqr_range,
                       scaling_road_types=config.scaling_road_types,
-                      outlier_groups=OUTLIER_GROUPS)
+                      outlier_groups=OUTLIER_GROUPS,
+                      share_check_classes=tuple(qa.share_check_classes),
+                      share_z_threshold=qa.share_z_threshold,
+                      share_min_days=qa.share_min_days,
+                      share_min_links=qa.share_min_links)
 
     raw['date'] = raw['date'].astype('datetime64[us]')
     volume = link_volumes(raw, links, attributes, load_day_types(config, version))

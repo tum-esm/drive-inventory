@@ -1,4 +1,4 @@
-"""Output products of a run (spec R12): line-source GeoPackage and summary table.
+"""Output products of a run (spec R12): line-source GeoPackage, summary table and gridded emissions.
 
 Units: the line sources hold g/km per link piece over the run's period (one year), as v1's
 `linesource_*.gpkg`; the summary holds tonnes per period. Totals of a component are the sum of
@@ -9,6 +9,8 @@ from pathlib import Path
 
 import geopandas as gpd
 import pandas as pd
+
+from drive.domain.gridding import by_component, grid_line_sources
 
 KEYS = ['road_link_id', 'from_node', 'piece', 'road_type', 'scaling_road_type', 'length_km']
 
@@ -52,3 +54,29 @@ def summary(tables: dict[str, pd.DataFrame]) -> pd.DataFrame:
         long['emission_t'] = long['emission_g'] / 1e6
         rows.append(long.assign(kind=kind)[['kind', 'road_type', 'vehicle_class', 'component', 'emission_t']])
     return pd.concat(rows, ignore_index=True)
+
+
+def gridded(layers: dict[str, gpd.GeoDataFrame], grid: gpd.GeoDataFrame, cell_id: str) -> dict[str, gpd.GeoDataFrame]:
+    """Emissions per grid cell and component in kg over the period: one layer per kind plus `total`.
+
+    Every cell of the grid is kept, zeros included. The cells are returned in the CRS of the line sources.
+    """
+    crs = next(iter(layers.values())).crs
+    if crs is None:
+        raise ValueError('The line sources have no CRS')
+    cells = grid[[cell_id, 'geometry']].to_crs(crs)
+    result = {}
+    for kind, lines in layers.items():
+        per_class = grid_line_sources(lines, emission_columns(lines), grid, cell_id)
+        result[kind] = by_component(per_class) / 1000
+    result['total'] = _total(list(result.values()))
+    return {kind: gpd.GeoDataFrame(cells.set_index(cell_id).join(frame).reset_index(), geometry='geometry',
+                                   crs=cells.crs) for kind, frame in result.items()}
+
+
+def _total(frames: list[pd.DataFrame]) -> pd.DataFrame:
+    """Cell-wise sum over kinds; a component missing in a kind counts as 0."""
+    total = frames[0]
+    for frame in frames[1:]:
+        total = total.add(frame, fill_value=0.0)
+    return total

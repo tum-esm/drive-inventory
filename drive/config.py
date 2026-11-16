@@ -201,6 +201,16 @@ class CountsQAConfig(_Strict):
     share_min_links: int = 5
 
 
+class GridConfig(_Strict):
+    """An output grid (spec R12b): polygon cells with an id column, in any CRS."""
+    path: Path  # relative to paths.data_root
+    cell_id: str = 'locationcode'
+
+
+class OutputsConfig(_Strict):
+    grids: dict[str, GridConfig] = {}  # name -> grid; every run writes grid_<name>_<stem>.gpkg
+
+
 class SharePool(_Strict):
     """Vehicle classes whose share is computed over several scaling road types together (spec D30)."""
     vehicle_classes: list[str]
@@ -219,6 +229,7 @@ class DriveConfig(_Strict):
     scaling_road_types: dict[str, str] = {}  # road type -> scaling road type, unlisted types map to themselves
     # required with a run section, so that pooling is always stated: [] computes every share per road type
     vehicle_share_pools: list[SharePool] | None = None
+    outputs: OutputsConfig = OutputsConfig()
 
     @model_validator(mode='after')
     def _check_and_resolve(self) -> 'DriveConfig':
@@ -234,6 +245,8 @@ class DriveConfig(_Strict):
             raise ValueError(f'run.traffic_model {self.run.traffic_model} is not in traffic_models')
         self.paths.store = root / self.paths.store
         self.paths.results = root / self.paths.results
+        for grid in self.outputs.grids.values():
+            grid.path = root / grid.path
         for m in self.traffic_models.values():
             m.links = root / m.links
             m.zones = root / m.zones

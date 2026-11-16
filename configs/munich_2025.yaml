@@ -200,3 +200,12 @@ scaling_road_types:
   Local/Collector: Distributor/Secondary
   Motorway-City: Motorway-Nat
   TrunkRoad/Primary-National: Distributor/Secondary
+
+# Output grids (spec R12b): every run writes grid_<name>_<stem>.gpkg with layers hot, cold and total, kg per cell and
+# component (docs/outputs_README.md). TNO grids of the Munich area, EPSG:4326, cell id `locationcode`
+outputs:
+  grids:
+    100m:
+      path: geodata/TNO_100m_grid_munich.gpkg
+    1km:
+      path: geodata/TNO_1km_grid_munich.gpkg

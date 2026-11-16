@@ -376,8 +376,9 @@ def run_inventory(config: DriveConfig) -> list[str]:
 
     Files per run (<stem> = model_year_hbefa<version>_batch<id>): hot_/cold_<stem>.parquet (g/km per link piece),
     hot_/cold_profile_<stem>.parquet (hourly g per road type or class), hot_/cold_timeprofile_<stem>.csv,
-    linesource_<stem>.gpkg (layers hot and cold, g/km with geometry) and summary_<stem>.csv (t per kind, road type,
-    vehicle class and component), see drive.outputs (R12).
+    linesource_<stem>.gpkg (layers hot and cold, g/km with geometry), summary_<stem>.csv (t per kind, road type,
+    vehicle class and component) and grid_<name>_<stem>.gpkg per outputs.grids (layers hot, cold, total; kg per cell
+    and component), see drive.outputs (R12).
 
     Returns:
         log lines: written files, timing and run reports
@@ -434,4 +435,15 @@ def run_inventory(config: DriveConfig) -> list[str]:
     totals = summary[summary['component'] == 'CO2(rep)'].groupby('kind')['emission_t'].sum()
     log.append(f'{linesource} (layers {", ".join(layers)}) and summary_{stem}{mode}.csv, '
                f'{time.perf_counter() - start:.1f} s; CO2(rep) t: {totals.round(0).to_dict()}')
+
+    for name, grid_config in config.outputs.grids.items():
+        start = time.perf_counter()
+        grid = gpd.read_file(grid_config.path)
+        cells = outputs.gridded(layers, grid, grid_config.cell_id)
+        path = results / f'grid_{name}_{stem}{mode}.gpkg'
+        outputs.write_line_sources(path, cells)
+        inside = cells['total']['CO2(rep)'].sum() / 1000
+        log.append(f'{path} (layers {", ".join(cells)}, kg per cell), {len(grid)} cells, '
+                   f'{time.perf_counter() - start:.1f} s; CO2(rep) inside the grid {inside:.0f} t of '
+                   f'{totals.sum():.0f} t ({inside / totals.sum():.2%})')
     return log

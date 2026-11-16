@@ -108,13 +108,14 @@ def _ingest_bast(args: argparse.Namespace) -> int:
     for year in [y for y in years if c.years[0] <= y < c.raw_from]:
         files = sorted(annual_dir.glob(f'zst*_{year}.zip'))
         sha = hashlib.sha256(''.join(store.file_sha256(f) for f in files).encode()).hexdigest()
-        existing = store.find_batch(config.paths.store, 'counts', sha, {'product': 'annual'})
+        params = {'product': 'annual', 'reader': bast.ANNUAL_READER_VERSION}
+        existing = store.find_batch(config.paths.store, 'counts', sha, params)
         if existing is not None:
             print(f'annual {year} already ingested as batch {existing}, skipped')
             continue
         counts = pd.concat([bast.read_station_table(f)[0] for f in files], ignore_index=True)
         batch = store.write_batch(config.paths.store, 'counts', bast.SOURCE, annual_dir / f'zst*_{year}.zip', sha,
-                                  {'product': 'annual'}, {'counts': counts}, note='BASt annual station files')
+                                  params, {'counts': counts}, note='BASt annual station files')
         flags = ''.join(counts.loc[counts['vehicle_class'] == 'SUM', 'flags'])
         print(f'annual {year} -> batch {batch}: {len(files)} stations, {len(counts)} rows; KFZ hours by flag '
               f'{pd.Series(list(flags)).value_counts().to_dict()}')

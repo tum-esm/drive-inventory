@@ -102,8 +102,11 @@ def _table_to_counts(df: pd.DataFrame, name: str) -> tuple[pd.DataFrame, BastRep
     frames = []
     for direction in (1, 2):
         for vehicle_class, parts in CLASSES.items():
-            values = np.sum([df[f'{p}_R{direction}'].astype(float).to_numpy() for p in parts], axis=0)
-            values[values < 0] = np.nan  # -1 with flag 'x'
+            columns = np.array([df[f'{p}_R{direction}'].astype(float).to_numpy() for p in parts])
+            values = columns.sum(axis=0)
+            # -1 (flag 'x') marks a column the station doesn't count; a class with such a part is missing. Summing
+            # would give e.g. PC = PmA - 1 at 5+1 stations, which don't count Pkw (fixed in ANNUAL_READER_VERSION 2)
+            values[(columns < 0).any(axis=0)] = np.nan
             flag_rank = np.max([df[f'K_{p}_R{direction}'].map(rank).to_numpy() for p in parts], axis=0)
             if np.isnan(flag_rank.astype(float)).any():
                 raise ValueError(f'{name}: unknown flags in {parts} R{direction}')
@@ -194,6 +197,9 @@ def _parse_raw_file(text: str, name: str) -> pd.DataFrame:
 
 
 CLASSES_COLUMNS = [c for parts in CLASSES.values() for c in parts]
+# part of the batch parameters of the annual files, so that a reader fix re-ingests them. 2: a class with a part that
+# isn't counted (-1) is missing instead of the sum of its parts (2026-11-16)
+ANNUAL_READER_VERSION = 2
 
 
 def _raw_members(archive: zipfile.ZipFile, stations: set[str] | None):

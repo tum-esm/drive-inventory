@@ -155,7 +155,7 @@ The command ends with a non-zero exit code on any error (network, format, unknow
 What v1 ignored (R41), and how the counts QA now handles it (see [How the counts QA uses the flags](#how-the-counts-qa-uses-the-flags)):
 
 - In many station-years the station counts no vehicle classes. Every class is then 0 with flag `a`, and v1 read those zeros as counts.
-- Stations 9064, 9219, 9220 and 9242 counted 5+1 classes in 2018 and/or 2019. v1's PC is then only `PmA` (cars with trailers) and LCV is 0.
+- Stations 9064, 9219, 9220 and 9242 counted 5+1 classes in 2018 and/or 2019. v1's PC is then only `PmA` (cars with trailers) and LCV is 0. v2's reader writes PC as missing there: a class with a part that isn't counted (−1) is missing, not the sum of its parts (`ANNUAL_READER_VERSION` 2, store batches 83–85).
 
 Classification per station and year, read from the merged tables (8+1: `Pkw` counted; 5+1: only `PLZ` counted; none: all classes `a`; empty: no data):
 
@@ -214,13 +214,15 @@ v1 preprocessed (batch 2): 1155216 rows, 84 detectors, 2018-01-01 to 2026-01-31
 BAST_CountingStations_daily_2018.csv: 109500 rows, 25 stations, 2018-01-01 to 2018-12-31, 0 station-hours without a row
 BAST_TrafficCounts_raw.csv: 1045716 rows, 42 stations, 2019-01-01 to 2026-01-31, 126 station-hours without a row
 rows only in v1 0, only in v2 0
-hourly values: 27723672 equal, 1512 missing here ([0.] in v1), 0 other differences
-daily values: max |diff| 0.0; differ in 0 rows
+hourly values: 27624073 equal, 101111 missing here ([0. 1. 2. 3. 4. 5. 6. 7. 8. 9.] in v1), 0 other differences
+daily values: max |diff| 1179.0; differ in 1746 rows
 ```
+
+Since `ANNUAL_READER_VERSION` 2 (2026-11-16): 99,599 of the missing hours and all differing daily values are PC at the 5+1 station-years (9064 2018, 9219, 9220 2018–2019, 9242 2018). v1 has `PmA` − 1 there; v2 writes a missing value. Before, the output was 27,723,672 equal, 1,512 missing, daily values equal.
 
 The 1,512 hourly values are the 126 station-hours without a row, times 2 directions and 6 classes.
 
-`uv run python scripts/compare_bast_sources.py` compares the ingested counts with v1's merged tables (values and flags), per year. Expected output (13 November 2026, store batch 82):
+`uv run python scripts/compare_bast_sources.py` compares the ingested counts with v1's merged tables (values and flags), per year. Expected output (16 November 2026, store batch 85; unchanged from batch 82, because both sides are read with the same reader):
 
 ```text
 v1 interim batch 2; new batches [62, ..., 82]; rows still read from the interim batch: 0
@@ -242,8 +244,6 @@ v1 interim batch 2; new batches [62, ..., 82]; rows still read from the interim 
 - 2026: January was revised by BASt after v1 downloaded it. At 38 of 42 stations the month is identical; at 9986 the estimates (`s`) became missing values (`a`, 0), at 9140 some values changed, at 9106 and 9773 only flags. Every value difference comes with a changed flag. February to August are new.
 
 Effect on `drive run` 2025 against the run on v1's BASt counts (store batch 61 vs 82): hot CO2(rep) −0.13 % and NOx −0.10 % (HGV −0.74 %, BUS −0.50 %, LCV +0.28 %, PC −0.03 %); cold CO2(rep) +0.05 %. The 2025 counts are the same. The effect comes from 2021–2022, because the counts QA detects outliers per link and day type over 2019–2025 together.
-
-## Open points
 
 ## How the counts QA uses the flags
 
@@ -280,6 +280,8 @@ The rule drops 0.2 % of the BASt link-days per class, 1.5 % for PC (the 5+1 stat
 Baseline: `data/inventory/baselines/v2.6-incompletedays`.
 
 BUS reacts most, because its share is the median BUS volume over few links and bus routes differ a lot. An example from the 2019-model series: link 52804341 (LHM 4013011/12) had a detector missing on 41 % of its days in 2019. Its completeness in the reference year falls from 0.70 to 0.42, below the 0.6 threshold. The completeness flag applies to all years of a link (v1 logic), so the link's complete 2024 data, a bus route with twice the median BUS volume, now leaves the shares too.
+
+## Open points
 
 - Completeness (spec R46, to implement). The intended rule: a link scales year Y only if it is at least 80 % complete in the reference year and in Y, each year on its own. The code still decides one flag per link from the reference year, with threshold 0.6 relative to the best-covered link (v1).
 
